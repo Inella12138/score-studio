@@ -5,7 +5,8 @@ const ROOT = path.resolve(__dirname, "..");
 function createServer(root = ROOT) {
   const library = new Library(root), token = crypto.randomBytes(32).toString("hex");
   const assets = { "/": ["index.html", "text/html"], "/index.html": ["index.html", "text/html"],
-    "/app.js": ["app.js", "application/javascript"], "/core.js": ["core.js", "application/javascript"], "/style.css": ["style.css", "text/css"] };
+    "/app.js": ["app.js", "application/javascript"], "/core.js": ["core.js", "application/javascript"], "/style.css": ["style.css", "text/css"],
+    "/assets/icon.png": ["assets/icon.png", "image/png"] };
   const server = http.createServer(async (req, res) => {
     const json = (status, body) => { res.writeHead(status, { "Content-Type": "application/json;charset=utf-8" }); res.end(JSON.stringify(body)); };
     res.setHeader("Cache-Control", "no-store");

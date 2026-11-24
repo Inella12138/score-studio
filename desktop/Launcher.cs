@@ -45,6 +45,7 @@ internal class Launcher : Form {
     }
     Launcher() {
         Text = "简谱工坊";
+        Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
         ClientSize = new Size(480, 245);
         Font = new Font("Microsoft YaHei", 10);
         StartPosition = FormStartPosition.CenterScreen;
@@ -62,7 +63,7 @@ internal class Launcher : Form {
         install.Click += delegate { Install(); };
         var note = new Label { Text = "曲库：应用目录 / scores\n窗口可最小化；关闭本窗口会退出本地服务，请先保存曲谱。", Location = new Point(24, 185), Size = new Size(430, 50) };
         Controls.AddRange(new Control[] { title, status, open, scores, install, note });
-        tray = new NotifyIcon { Icon = SystemIcons.Application, Text = "简谱工坊", Visible = true };
+        tray = new NotifyIcon { Icon = this.Icon, Text = "简谱工坊", Visible = true };
         tray.DoubleClick += delegate { Show(); WindowState = FormWindowState.Normal; Activate(); };
         Shown += delegate { StartServer(); };
         FormClosed += delegate {
