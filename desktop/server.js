@@ -40,8 +40,7 @@ function createServer(root = ROOT) {
       if (url.pathname === "/api/login" && req.method === "POST") return json(200, await github.login());
       return json(404, { error: "未找到" });
     } catch (error) {
-      json(400, { error: error.status ? `GitHub 请求失败 (${error.status})，请检查网络和权限；若远程已变化，请先更新曲库。` :
-        error.name === "TimeoutError" ? "网络超时，本地曲谱未被覆盖，请稍后重试" : error.message });
+      json(400, { error: error.name === "TimeoutError" ? "网络超时，本地曲谱未被覆盖，请稍后重试" : error.message });
     }
   });
   server.requestTimeout = 300000;

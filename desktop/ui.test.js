@@ -50,3 +50,27 @@ test("desktop page saves to scores, lists library and requires an explicit uploa
   assert.equal(secondSave.name, "未命名曲谱.score.json");
   assert.equal(secondSave.expectedSha, null);
 });
+test("contributor preview clearly requests PR review and shows the resulting PR without auto-submitting", async t => {
+  const dom = new JSDOM(fs.readFileSync(`${__dirname}/../index.html`, "utf8"), {
+    url: "http://127.0.0.1:18761/#token=test-token", runScripts: "outside-only", pretendToBeVisual: true
+  });
+  t.after(() => dom.window.close());
+  const w = dom.window, d = w.document, $ = id => d.getElementById(id);
+  w.HTMLDialogElement.prototype.showModal = function () { this.open = true; };
+  w.HTMLDialogElement.prototype.close = function () { this.open = false; };
+  let uploads = 0;
+  w.fetch = async route => ({ ok: true, json: async () => {
+    if (route === "/api/list") return { files: [] };
+    if (route === "/api/preview") return { id: "review", submission: "pull_request", actor: "partner", changes: [{ name: "合奏.score.json", action: "新增" }] };
+    if (route === "/api/upload") { uploads++; return { message: "已提交 PR，等待 Inella12138 审核", pullRequest: { number: 1, url: "https://github.com/Inella12138/score-studio/pull/1" } }; }
+    throw new Error("Unexpected route");
+  } });
+  w.eval(fs.readFileSync(`${__dirname}/../core.js`, "utf8")); w.eval(fs.readFileSync(`${__dirname}/../app.js`, "utf8"));
+  $("uploadLibrary").click(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(uploads, 0);
+  assert.ok($("confirmUpload").textContent.includes("提交 PR"));
+  assert.ok($("uploadStatus").textContent.includes("不会直接修改主曲库"));
+  $("confirmUpload").click(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(uploads, 1);
+  assert.ok($("uploadStatus").textContent.includes("/pull/1"));
+});

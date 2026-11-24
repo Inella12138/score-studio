@@ -14,11 +14,12 @@ internal class Launcher : Form {
     private Label status;
     private Button open;
     private NotifyIcon tray;
+    private bool exiting;
     private readonly string root = AppDomain.CurrentDomain.BaseDirectory;
     [STAThread]
     static void Main(string[] args) {
-        if (args.Length == 1 && args[0] == "--self-test") {
-            string root = AppDomain.CurrentDomain.BaseDirectory;
+        if (args.Length >= 1 && args[0] == "--self-test") {
+            string root = args.Length == 2 ? Path.GetFullPath(args[1]) : AppDomain.CurrentDomain.BaseDirectory;
             if (!File.Exists(Path.Combine(root, "bin", "node.exe")) ||
                 !File.Exists(Path.Combine(root, "desktop", "server.js")) ||
                 !File.Exists(Path.Combine(root, "index.html"))) Environment.Exit(2);
@@ -79,8 +80,15 @@ internal class Launcher : Form {
         var menu = new ContextMenuStrip();
         menu.Items.Add("打开曲库", null, delegate { OpenEditor(); });
         menu.Items.Add("显示启动面板", null, delegate { Show(); WindowState = FormWindowState.Normal; Activate(); });
-        menu.Items.Add("退出简谱工坊", null, delegate { Close(); });
+        menu.Items.Add("退出简谱工坊", null, delegate {
+            if (MessageBox.Show("退出会停止曲库服务。请确认曲谱已保存。", "退出简谱工坊", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
+                exiting = true; Close();
+            }
+        });
         tray.ContextMenuStrip = menu;
+        FormClosing += delegate(object sender, FormClosingEventArgs e) {
+            if (!exiting && e.CloseReason == CloseReason.UserClosing) { e.Cancel = true; Hide(); }
+        };
         Shown += delegate { StartServer(); };
         FormClosed += delegate {
             tray.Dispose();

@@ -29,12 +29,22 @@ async function api(route, { method = "GET", body, token, raw } = {}) {
     "X-GitHub-Api-Version": "2022-11-28" };
   if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers["Content-Type"] = "application/json";
-  const response = await fetch(`https://api.github.com${route}`, {
-    method, headers, body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(45000)
-  });
+  let response;
+  try {
+    response = await fetch(`https://api.github.com${route}`, {
+      method, headers, body: body === undefined ? undefined : JSON.stringify(body),
+      signal: AbortSignal.timeout(45000)
+    });
+  } catch (cause) {
+    const error = new Error(cause.name === "TimeoutError" || cause.name === "AbortError" ?
+      "连接 GitHub 超时，请稍后重试；本地曲谱没有被覆盖。" :
+      "本地服务正常，但无法连接 GitHub，请检查网络或代理设置后重试；本地曲谱没有被覆盖。");
+    error.cause = cause; throw error;
+  }
   if (!response.ok) {
-    const error = new Error(`GitHub 请求失败 (${response.status})，请检查网络、权限或请求频率。`);
+    const limited = response.status === 429 || response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0";
+    const error = new Error(limited ? "GitHub 请求次数已达上限，请稍后再更新曲库。本地曲谱仍可正常编辑。" :
+      `GitHub 请求失败 (${response.status})，请检查网络与仓库权限。`);
     error.status = response.status; throw error;
   }
   if (response.status === 204) return null;

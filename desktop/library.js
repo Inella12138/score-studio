@@ -1,6 +1,6 @@
 "use strict";
 const fs = require("node:fs/promises"), path = require("node:path"), crypto = require("node:crypto");
-const C = require("../core"), github = require("./github");
+const C = require("../core"), github = require("./github"), contributions = require("./contributions");
 const gitSha = data => crypto.createHash("sha1").update(`blob ${data.length}\0`).update(data).digest("hex");
 function safeName(name) {
   if (typeof name !== "string" || !name.endsWith(".score.json") || name.length > 180 ||
@@ -99,7 +99,9 @@ class Library {
   }
   async prepare() {
     return this.exclusive(async () => {
-      const token = await this.remote.credential(), snapshot = await this.remote.snapshot(token), state = await this.state();
+      const token = await this.remote.credential(), identity = await contributions.identity(this.remote.api, token);
+      const submission = identity.login.toLowerCase() === github.OWNER.toLowerCase() ? "direct" : "pull_request";
+      const snapshot = await this.remote.snapshot(token), state = await this.state();
       const remote = new Map(snapshot.files.map(e => [e.path.slice(7), e.sha])), files = await this.files(), changes = [];
       for (const f of files) {
         if (!remote.has(f.name) && [...remote.keys()].some(n => n.toLowerCase() === f.name.toLowerCase())) throw new Error(`「${f.name}」与远程文件名仅大小写不同，请统一名称后重试`);
@@ -110,19 +112,30 @@ class Library {
       }
       if (changes.length > 100) throw new Error("单次最多上传 100 首曲谱");
       const id = crypto.randomUUID(); this.previews.clear();
-      this.previews.set(id, { changes, head: snapshot.head, tree: snapshot.tree, expires: Date.now() + 600000 });
-      return { id, changes: changes.map(({ name, action }) => ({ name, action })), repository: `${github.OWNER}/${github.REPO}`, public: true };
+      this.previews.set(id, { changes, identity, submission, head: snapshot.head, tree: snapshot.tree, expires: Date.now() + 600000 });
+      return { id, changes: changes.map(({ name, action }) => ({ name, action })), repository: `${github.OWNER}/${github.REPO}`,
+        public: true, submission, actor: identity.login };
     });
   }
   async upload(id) {
     return this.exclusive(async () => {
       const preview = this.previews.get(id); this.previews.delete(id);
       if (!preview || preview.expires < Date.now()) throw new Error("上传预览已过期，请重新预览");
-      if (!preview.changes.length) return { message: "没有需要上传的曲谱" };
       const now = new Map((await this.files()).map(f => [f.name, f.sha]));
       if (preview.changes.some(f => now.get(f.name) !== f.sha)) throw new Error("预览后曲谱发生变化，请重新预览");
-      const token = await this.remote.credential(), snapshot = await this.remote.snapshot(token);
+      const token = await this.remote.credential(), identity = await contributions.identity(this.remote.api, token);
+      if (!contributions.sameAccount(preview.identity, identity)) throw new Error("GitHub 账号在预览后已更换，请重新预览");
+      if (!preview.changes.length) return { submission: preview.submission, actor: identity.login, message: "没有需要上传的曲谱" };
+      const snapshot = await this.remote.snapshot(token);
       if (snapshot.head !== preview.head) throw new Error("远程在预览后已更新，请先更新曲库再上传");
+      if (preview.submission === "pull_request") {
+        const state = await this.state();
+        const result = await contributions.submit({ api: this.remote.api, token, actor: identity.login,
+          snapshot, changes: preview.changes, pending: state.pendingPR });
+        state.pendingPR = { ...result, fingerprint: contributions.fingerprint(preview.changes) };
+        await atomic(this.stateFile, JSON.stringify(state, null, 2));
+        return result;
+      }
       const { api, repoPath } = this.remote, tree = [];
       for (const f of preview.changes) {
         const blob = await api(`${repoPath}/git/blobs`, { method: "POST", token, body: { encoding: "base64", content: f.data.toString("base64") } });

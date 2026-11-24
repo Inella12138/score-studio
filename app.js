@@ -28,12 +28,17 @@
     } catch {}
   }
   async function libraryApi(route, body) {
-    const response = await fetch(`/api/${route}`, {
-      method: body === undefined ? "GET" : "POST",
-      headers: { "X-Score-Token": desktopToken, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
-      body: body === undefined ? undefined : JSON.stringify(body)
-    });
-    const result = await response.json();
+    let response;
+    try {
+      response = await fetch(`/api/${route}`, {
+        method: body === undefined ? "GET" : "POST",
+        headers: { "X-Score-Token": desktopToken, ...(body === undefined ? {} : { "Content-Type": "application/json" }) },
+        body: body === undefined ? undefined : JSON.stringify(body)
+      });
+    } catch { throw new Error("无法连接本地曲库服务。请重新运行 ScoreStudio.exe，并在新打开的应用窗口重试；当前草稿仍保存在浏览器中。"); }
+    let result;
+    try { result = await response.json(); }
+    catch { throw new Error("本地服务没有返回有效响应，请重新打开 ScoreStudio.exe 后重试。"); }
     if (!response.ok) throw new Error(result.error || "曲库操作失败");
     return result;
   }
@@ -600,14 +605,15 @@
       $("uploadStatus").textContent = "正在检查本地与远程差异；尚未上传…";
       try {
         uploadPreview = await libraryApi("preview", {});
+        $("confirmUpload").textContent = uploadPreview.submission === "pull_request" ? "提交 PR，等待 Inella12138 审核" : "确认上传这些曲谱";
         for (const change of uploadPreview.changes) $("uploadFiles").append(el("div", "library-row", `${change.action}：${change.name}`));
-        $("uploadStatus").textContent = uploadPreview.changes.length ? `共 ${uploadPreview.changes.length} 首待上传，请核对。` : "曲库已是最新，没有待上传变更。";
+        $("uploadStatus").textContent = uploadPreview.changes.length ? `共 ${uploadPreview.changes.length} 首待上传，请核对。${uploadPreview.submission === "pull_request" ? "当前账号将提交 Pull Request，不会直接修改主曲库。" : ""}` : "曲库已是最新，没有待上传变更。";
         $("confirmUpload").disabled = !uploadPreview.changes.length;
       } catch (e) { $("uploadStatus").textContent = e.message; }
     };
     $("confirmUpload").onclick = async () => {
-      $("confirmUpload").disabled = true; $("uploadStatus").textContent = "正在提交到公开曲库…";
-      try { const r = await libraryApi("upload", { id: uploadPreview?.id }); $("uploadStatus").textContent = r.message; }
+      $("confirmUpload").disabled = true; $("uploadStatus").textContent = uploadPreview?.submission === "pull_request" ? "正在创建分支与 Pull Request…" : "正在提交到公开曲库…";
+      try { const r = await libraryApi("upload", { id: uploadPreview?.id }); $("uploadStatus").textContent = r.message + (r.pullRequest?.url ? `\nPR：${r.pullRequest.url}` : ""); }
       catch (e) { $("uploadStatus").textContent = e.message; }
     };
     $("githubLogin").onclick = async () => {
