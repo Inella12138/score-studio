@@ -19,31 +19,44 @@ async function atomic(file, data) {
   finally { await fs.unlink(temp).catch(() => {}); }
 }
 class Library {
-  constructor(root, remote = github) { this.root = root; this.dir = path.join(root, "scores"); this.stateFile = path.join(root, ".local", "sync.json"); this.remote = remote; this.previews = new Map(); this.busy = false; }
+  constructor(root, remote = github) { this.root = root; this.dir = path.join(root, "scores"); this.stateFile = path.join(root, ".local", "sync.json"); this.remote = remote; this.previews = new Map(); this.busy = false; this.artifacts = new (require("./artifacts").Artifacts)(this); }
   async exclusive(fn) {
     if (this.busy) throw new Error("曲库正在保存或同步，请稍后重试");
     this.busy = true; try { return await fn(); } finally { this.busy = false; }
   }
   async state() { try { return JSON.parse(await fs.readFile(this.stateFile, "utf8")); } catch (e) { if (e.code === "ENOENT") return { base: {} }; throw new Error("本地同步记录损坏，请保留曲库并联系维护者"); } }
-  async files() {
+  async files({ tolerateInvalid = false } = {}) {
     await fs.mkdir(this.dir, { recursive: true });
     const entries = await fs.readdir(this.dir, { withFileTypes: true }), files = [];
     for (const e of entries) if (e.isFile() && e.name.endsWith(".score.json")) {
-      safeName(e.name);
-      const data = await fs.readFile(path.join(this.dir, e.name));
-      files.push({ name: e.name, sha: gitSha(data), data });
+      try {
+        safeName(e.name);
+        const data = await require("./artifacts").boundedRead(this.root, path.join(this.dir, e.name), 4 * 1024 * 1024);
+        files.push({ name: e.name, sha: gitSha(data), data });
+      } catch (e2) {
+        if (!tolerateInvalid) throw new Error(`无法读取曲谱「${e.name}」：${e2.message}`);
+        files.push({ name: e.name, error: e2.message });
+      }
     }
     return files;
   }
   async list() {
     const items = [];
-    for (const f of await this.files()) {
-      try { const p = validate(f.data); items.push({ name: f.name, title: p.title, voices: p.voices.length, valid: true }); }
-      catch { items.push({ name: f.name, title: f.name, valid: false }); }
+    for (const f of await this.files({ tolerateInvalid: true })) {
+      if (f.error) {
+        items.push({ name: f.name, title: f.name, valid: false, error: f.error, voices: 0, voiceNames: [], artifactCount: 0, artifacts: [] }); continue;
+      }
+      const updatedAt = (await fs.stat(path.join(this.dir, f.name))).mtime.toISOString();
+      let artifacts = [], artifactError = null;
+      try { artifacts = await this.artifacts.list(f.name, f.sha); } catch (e) { artifactError = e.message; }
+      const base = { name: f.name, sha: f.sha, updatedAt, artifacts, artifactCount: artifacts.length, artifactError };
+      try { const p = validate(f.data), compiled = C.compile(p); items.push({ ...base, title: p.title, voices: p.voices.length,
+        bpm: p.bpm, meter: p.meter, bars: compiled.bars.length, voiceNames: p.voices.map(v => v.name), valid: true }); }
+      catch { items.push({ ...base, title: f.name, bpm: null, meter: null, bars: 0, voiceNames: [], valid: false }); }
     }
     return items.sort((a, b) => a.name.localeCompare(b.name, "zh"));
   }
-  async read(name) { const data = await fs.readFile(path.join(this.dir, safeName(name))); return { project: validate(data), sha: gitSha(data), name }; }
+  async read(name) { const data = await require("./artifacts").boundedRead(this.root, path.join(this.dir, safeName(name)), 4 * 1024 * 1024); return { project: validate(data), sha: gitSha(data), name }; }
   async save(name, project, expectedSha) {
     return this.exclusive(async () => {
       safeName(name); const data = Buffer.from(JSON.stringify(project, null, 2) + "\n"); validate(data);

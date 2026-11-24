@@ -4,12 +4,12 @@ Windows 离线录谱、实时简谱预览与 AutoHotkey v2 演奏脚本生成工
 
 ## 桌面版与共享曲库
 
-完整解压桌面发行包，双击 **ScoreStudio.exe**。它会在本机启动编辑器并以独立浏览器窗口打开，不需要安装 Node.js。启动器窗口可最小化，关闭它会停止本地服务，请先保存曲谱。编辑器依赖本机 Edge / Chrome；没有时会用默认浏览器打开。EXE 是启动器，需与整包文件一起保留，不是单文件应用。
+完整解压桌面发行包，双击 **ScoreStudio.exe**。它会在本机启动曲库首页并以独立浏览器窗口打开，不需要安装 Node.js。启动面板会自动收起到系统托盘，双击托盘图标可显示面板，右键可重新打开曲库或退出应用。退出会停止本地服务，请先保存曲谱。编辑器依赖本机 Edge / Chrome；没有时会用默认浏览器打开。EXE 是启动器，需与整包文件一起保留，不是单文件应用。
 
 曲谱保存在 **EXE 同目录的 `scores` 文件夹**。请将应用解压到有写入权限的位置，例如桌面或 D 盘，不建议 Program Files。
 
 - **保存到曲库**：把当前项目写入 `scores`，仍保留草稿自动保存。已有同名曲谱请先从曲库打开再编辑；避免意外覆盖。
-- **曲库**：查看并打开本地项目。原来的“打开项目”可以导入别处的 JSON，再保存进曲库。
+- **曲库首页**：以卡片展示曲名、速度、拍号、小节数、声部与演奏脚本数量，支持搜索曲名/声部、最近修改排序和只看已有脚本的曲目。点卡片查看详情，直接进入编辑或导出；“继续编辑草稿”保留当前工作，不用重新打开项目。
 - **更新曲库**：从公开的 `Inella12138/score-studio` 仓库下载新曲谱，不需要 GitHub 账号，也不用安装 Git。本地未上传修改会保留；双方同名修改时，远程副本保存到 `.local/conflicts`，不会直接覆盖。
 - **上传曲谱**：检查 `scores` 中新增和修改的曲谱，展示待上传清单，点击确认后提交到公开仓库。不会上传浏览器未保存的草稿，不会上传临时文件或凭据。上传后任何人可查看。
 
@@ -19,11 +19,19 @@ Windows 离线录谱、实时简谱预览与 AutoHotkey v2 演奏脚本生成工
 
 应用更新和曲库更新是分开的：曲库按钮只下载 JSON，不下载或执行远程程序；应用版本更新请下载新的桌面包。换设备或更新应用时，请先备份整个 `scores` 和 `.local` 文件夹。浏览器旧版 `file://` 草稿与桌面版的本机地址不同，旧草稿请先导出 JSON，再在桌面版打开。
 
+### 曲目与演奏脚本
+
+桌面版导出窗口的“保存演奏脚本”会先保存当前项目，再把选定声部生成的 AHK 和元信息归档到 **应用目录 `artifacts/<曲目>/`**。每次导出独立保存，支持高声部、低声部、人声、合并声部和不同演奏模式的多份制品。曲库卡片显示脚本数，详情中展示声部、模式与导出日期，可直接预览或下载；脚本不会自动运行。
+
+制品记录生成时的曲谱版本，项目修改后，旧脚本会显示“曲谱已有更新，建议重新导出”。脚本内容由本机生成器生成，必须与已保存曲谱匹配；未保存或版本已变时拒绝归档。原有网页方式直接打开 `index.html` 时，仍通过浏览器下载 AHK。
+
+**目前 GitHub 曲库同步只同步 `scores` 项目 JSON，`artifacts` 制品在本机归档，不随上传曲谱按钮上传。** 分享制品可在详情下载后发送给伙伴；跨设备搬迁请一并备份 `artifacts`。发行包不包含个人导出制品。
+
 首次启动会检查常见安装位置的 AutoHotkey v2；未检测到时可选择打开随包离线安装界面或跳过。只有演奏导出的脚本才需要 AHK。便携版或自定义安装路径可能未被检测到，已能运行 v2 脚本时可跳过安装。
 
 ### 从源码打包
 
-Windows 需要 Node.js 22 和 .NET Framework 4.x 编译器。执行 `powershell -NoProfile -File desktop/build.ps1 -Package`，生成 EXE 和包含运行环境、安装包及曲谱的 ZIP。ZIP 不包括 Git 认证、本机同步记录、测试依赖、个人草稿。测试：`node --test core.test.js ui.test.js mode.test.js desktop/*.test.js`（页面测试需要先安装下文的 jsdom）。
+Windows 需要 Node.js 22 和 .NET Framework 4.x 编译器。执行 `powershell -NoProfile -File desktop/build.ps1 -Package`，生成 EXE 和包含运行环境、安装包及曲谱的 ZIP。ZIP 不包括 Git 认证、本机同步记录、测试依赖、个人草稿。测试：`node --test --test-concurrency=1 core.test.js ui.test.js mode.test.js desktop/*.test.js`（页面测试需要先安装下文的 jsdom）。
 
 附带 Node.js 的完整授权见发行包 `bin/LICENSE-node.txt`（源码副本在 `desktop/LICENSE-node.txt`）。附带原版 AutoHotkey ZIP 中保留其授权；对应 2.0.26 源码可从官方 AutoHotkey/AutoHotkey 仓库的 v2.0.26 标签获取。
 
@@ -143,4 +151,4 @@ Windows 需要 Node.js 22 和 .NET Framework 4.x 编译器。执行 `powershell 
 
 在本目录运行 `node --test core.test.js`。纯前端应用，没有运行时第三方依赖。AHK 导出使用绝对事件时间表和本机高精度计时，实际触发仍受 Windows 调度与钢琴软件影响。
 
-可选页面行为验证：先执行 `npm install --prefix .test-runtime --no-save --no-package-lock jsdom`，再运行 `node --test core.test.js ui.test.js`。当前 39 组编辑器测试通过；独立转换工具另有 8 组测试。并行小节的点按、按住导出已通过本机 AutoHotkey 2.0.26 的脚本 `/validate` 校验。尚未完成真实浏览器视觉验收；用户已验证管理员权限下的钢琴软件按键接收。新增谱面排版尚待实际浏览器验收；极短音符可能在同一次系统计时回调中执行。
+可选页面行为验证：先执行 `npm install --prefix .test-runtime --no-save --no-package-lock jsdom`，再运行 `node --test --test-concurrency=1 core.test.js ui.test.js mode.test.js desktop/*.test.js`。当前 58 组编辑器与桌面曲库测试通过；独立转换工具另有测试。曲库首页、曲目详情、声部导出归档和脚本预览已做真实浏览器检查；并行小节的点按、按住导出已通过本机 AutoHotkey 2.0.26 的脚本 `/validate` 校验。用户已验证管理员权限下的钢琴软件按键接收。极短音符可能在同一次系统计时回调中执行。

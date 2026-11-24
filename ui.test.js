@@ -4,6 +4,13 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const { JSDOM } = require("./.test-runtime/node_modules/jsdom");
+async function waitForDom(predicate) {
+  const deadline = Date.now() + 3000;
+  while (!predicate()) {
+    if (Date.now() > deadline) throw new Error("DOM rendering did not settle");
+    await new Promise(resolve => setTimeout(resolve, 20));
+  }
+}
 test("offline page: demo, live errors, selected export, simplification and project data", async () => {
   const errors = [];
   const dom = new JSDOM(fs.readFileSync(`${__dirname}/index.html`, "utf8"), {
@@ -70,6 +77,7 @@ test("offline page: demo, live errors, selected export, simplification and proje
   assert.equal($("compileBadge").textContent, "✓ 实时编译");
   assert.equal(d.querySelectorAll(".grace-notes").length, 1);
   assert.equal(d.querySelectorAll(".beamed").length, 8);
+  await waitForDom(() => d.querySelectorAll(".beam-layer line").length === 4);
   assert.equal(d.querySelectorAll(".beam-layer line").length, 4);
   allSources[0].value = "{1234}-- {5671}-- (4050<40>50) 0";
   allSources[0].dispatchEvent(new w.Event("input", { bubbles: true }));
@@ -78,6 +86,7 @@ test("offline page: demo, live errors, selected export, simplification and proje
   assert.equal(d.querySelectorAll(".grace-notes").length, 1);
   assert.equal(d.querySelector(".grace-notes .grace-pitch.high").textContent, "4");
   assert.equal(d.querySelectorAll(".beamed").length, 11);
+  await waitForDom(() => d.querySelectorAll(".beam-layer line").length === 5);
   assert.equal(d.querySelectorAll(".beam-layer line").length, 5);
   $("openExport").click();
   assert.equal($("downloadAhk").disabled, false);

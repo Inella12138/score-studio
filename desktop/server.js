@@ -30,6 +30,9 @@ function createServer(root = ROOT) {
       }
       if (url.pathname === "/api/list" && req.method === "GET") return json(200, { files: await library.list(), repository: `${github.OWNER}/${github.REPO}` });
       if (url.pathname === "/api/read" && req.method === "GET") return json(200, await library.read(url.searchParams.get("name")));
+      if (url.pathname === "/api/artifacts/export" && req.method === "POST") return json(200, await library.artifacts.export(body));
+      if (url.pathname === "/api/artifacts" && req.method === "GET") return json(200, { artifacts: await library.artifacts.list(url.searchParams.get("name")) });
+      if (url.pathname === "/api/artifact" && req.method === "GET") return json(200, await library.artifacts.read(url.searchParams.get("name"), url.searchParams.get("id")));
       if (url.pathname === "/api/save" && req.method === "POST") return json(200, await library.save(body.name, body.project, body.expectedSha));
       if (url.pathname === "/api/update" && req.method === "POST") return json(200, await library.update());
       if (url.pathname === "/api/preview" && req.method === "POST") return json(200, await library.prepare());

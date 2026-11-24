@@ -17,6 +17,7 @@
   ] });
   let project = demo(), compiled, timer, toastTimer;
   let libraryFile = null, librarySha = null, uploadPreview = null;
+  let homeFiles = [], homeFilter = "all", selectedSong = null, artifactPreview = null;
   const desktop = location.hostname === "127.0.0.1" && /^http:$/.test(location.protocol);
   let desktopToken = "";
   if (desktop) {
@@ -80,6 +81,17 @@
     $("minHoldPercent").value = project.minHoldPercent ?? 80;
     document.querySelector(`input[name="mode"][value="${project.exportMode === "hold" ? "hold" : "tap"}"]`).checked = true;
     renderVoices(); update();
+  }
+  function editorView() {
+    $("libraryHome").hidden = true; $("editorMain").hidden = false; document.body.classList.remove("library-view");
+    $("openLibrary").textContent = "← 返回曲库";
+  }
+  async function homeView() {
+    $("libraryHome").hidden = false; $("editorMain").hidden = true; document.body.classList.add("library-view");
+    $("openLibrary").textContent = "曲库";
+    $("homeStatus").textContent = "正在读取本地曲库…";
+    try { await showLibrary(); $("homeStatus").textContent = ""; }
+    catch (e) { $("homeStatus").textContent = e.message; }
   }
   function updateVoicePosition(input) {
     const output = input.closest(".voice-card")?.querySelector(".voice-count");
@@ -470,13 +482,18 @@
     while (used.has(bar)) bar++;
     project.lengths.push({ bar, meter: "2/4", scope: "single" }); renderSettings(); flush();
   };
+  async function saveToLibrary() {
+    const savedProject = project;
+    const result = await libraryApi("save", { name: libraryFile || `${filename()}.score.json`, project, expectedSha: librarySha });
+    if (project !== savedProject) throw new Error("已保存刚才的项目；当前项目已切换，请重新操作。");
+    libraryFile = result.name; librarySha = result.sha;
+    return result;
+  }
   $("saveProject").onclick = async () => {
     flush();
     if (!desktop) { download(`${filename()}.score.json`, JSON.stringify(project, null, 2), "application/json;charset=utf-8"); toast("项目文件已导出"); return; }
     try {
-      const savedProject = project;
-      const result = await libraryApi("save", { name: libraryFile || `${filename()}.score.json`, project, expectedSha: librarySha });
-      if (project === savedProject) { libraryFile = result.name; librarySha = result.sha; }
+      await saveToLibrary();
       toast("已保存到应用目录 scores；上传曲谱后其他设备才会获取更新");
     } catch (e) { toast(e.message); }
   };
@@ -487,12 +504,12 @@
       if (file.size > 4 * 1024 * 1024) throw new Error("项目文件不能超过 4MB");
       const next = C.validateProject(JSON.parse(await file.text()));
       if (!confirm("打开项目将替换当前草稿。建议先保存当前项目，是否继续？")) return;
-      project = next; libraryFile = librarySha = null; mount(); toast("项目已打开");
+      project = next; libraryFile = librarySha = null; mount(); editorView(); toast("项目已打开");
     } catch (e) { toast(`无法打开：${e.message}`); }
     finally { $("fileInput").value = ""; }
   };
-  $("newProject").onclick = () => { if (confirm("新建将替换当前草稿，是否继续？")) { project = blank(); libraryFile = librarySha = null; mount(); } };
-  $("loadDemo").onclick = () => { if (confirm("载入示例将替换当前草稿，是否继续？")) { project = demo(); libraryFile = librarySha = null; mount(); } };
+  $("newProject").onclick = () => { if (confirm("新建将替换当前草稿，是否继续？")) { project = blank(); libraryFile = librarySha = null; mount(); editorView(); } };
+  $("loadDemo").onclick = () => { if (confirm("载入示例将替换当前草稿，是否继续？")) { project = demo(); libraryFile = librarySha = null; mount(); editorView(); } };
   $("openExport").onclick = () => {
     flush(); $("exportVoices").replaceChildren();
     renderModeRows();
@@ -521,9 +538,22 @@
     const p = updateExport(); if (p.errors.length) return;
     $("codePreview").textContent = C.ahk(project, p, { schedule: scheduleValue() }); $("codePreview").hidden = false;
   };
-  $("downloadAhk").onclick = () => {
+  $("downloadAhk").onclick = async () => {
     flush(); const p = updateExport(); if (p.errors.length) return;
     const mode = document.querySelector('input[name="mode"]:checked').value;
+    if (desktop) {
+      $("downloadAhk").disabled = true;
+      try {
+        const snapshot = project, selected = exportSelection(), options = { schedule: scheduleValue() };
+        const saved = await saveToLibrary();
+        if (project !== snapshot) throw new Error("当前项目已切换，请重新导出");
+        await libraryApi("artifacts/export", { name: saved.name, expectedSha: saved.sha, project: snapshot, selected, mode, options });
+        toast("演奏脚本已归档到此曲目的制品列表，可在曲库查看或下载");
+        $("exportDialog").close();
+      } catch (e) { $("exportStatus").textContent = e.message; }
+      finally { $("downloadAhk").disabled = false; }
+      return;
+    }
     download(`${filename()}-${mode}-${exportSelection().length}声部.ahk`, "\uFEFF" + C.ahk(project, p, { schedule: scheduleValue() }), "text/plain;charset=utf-8");
     toast("AHK 脚本已导出，请先聚焦钢琴窗口再开始");
   };
@@ -533,6 +563,7 @@
   window.addEventListener("beforeunload", persist);
   async function showLibrary() {
     const { files } = await libraryApi("list");
+    homeFiles = files; renderCollection();
     $("libraryFiles").replaceChildren();
     for (const file of files) {
       const row = el("div", "library-row"), info = el("span", "", file.valid ? `${file.title} · ${file.voices} 声部` : `${file.name} · 文件格式待修复`);
@@ -542,7 +573,7 @@
           const result = await libraryApi(`read?name=${encodeURIComponent(file.name)}`);
           const next = C.validateProject(result.project);
           if (!confirm("打开曲库曲谱会替换当前草稿，请先保存。是否继续？")) return;
-          project = next; libraryFile = result.name; librarySha = result.sha; mount(); $("libraryDialog").close();
+          project = next; libraryFile = result.name; librarySha = result.sha; mount(); editorView(); $("libraryDialog").close();
         } catch (e) { $("libraryStatus").textContent = e.message; }
       };
       row.append(info, open); $("libraryFiles").append(row);
@@ -551,10 +582,9 @@
   if (desktop) {
     for (const id of ["openLibrary", "updateLibrary", "uploadLibrary"]) $(id).hidden = false;
     $("saveProject").textContent = "保存到曲库";
+    $("downloadAhk").textContent = "保存演奏脚本";
     $("openLibrary").onclick = async () => {
-      $("libraryDialog").showModal(); $("libraryStatus").textContent = "正在读取本地曲库…";
-      try { await showLibrary(); $("libraryStatus").textContent = "曲库文件夹：应用目录 / scores"; }
-      catch (e) { $("libraryStatus").textContent = e.message; }
+      await homeView();
     };
     $("updateLibrary").onclick = async () => {
       $("updateLibrary").disabled = true;
@@ -587,5 +617,93 @@
       finally { $("githubLogin").disabled = false; }
     };
   }
+  function dateLabel(value) {
+    if (!value) return "";
+    const date = new Date(value); return Number.isNaN(date.valueOf()) ? "" : date.toLocaleDateString("zh-CN");
+  }
+  function voicesFor(file) { return file.voiceNames || [`${file.voices || 0} 个声部`]; }
+  function renderCollection() {
+    const artifactTotal = homeFiles.reduce((sum, f) => sum + (f.artifactCount || f.artifacts?.length || 0), 0);
+    $("homeScoreCount").textContent = $("navScoreCount").textContent = homeFiles.length;
+    $("homeVoiceCount").textContent = homeFiles.reduce((sum, f) => sum + (f.voices || 0), 0);
+    $("homeArtifactCount").textContent = $("navArtifactCount").textContent = artifactTotal;
+    const query = $("librarySearch").value.trim().toLowerCase();
+    const files = homeFiles.filter(f => (homeFilter !== "artifacts" || (f.artifactCount || f.artifacts?.length)) &&
+      `${f.title} ${f.name} ${voicesFor(f).join(" ")}`.toLowerCase().includes(query));
+    if ($("librarySort").value === "recent") files.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0));
+    else files.sort((a, b) => a.title.localeCompare(b.title, "zh"));
+    $("collectionHeading").textContent = homeFilter === "artifacts" ? "演奏脚本" : "全部曲谱";
+    $("collectionCount").textContent = `${files.length} 首`;
+    $("libraryGrid").replaceChildren(); $("libraryEmpty").hidden = !!files.length;
+    files.forEach((file, i) => {
+      const card = el("article", `song-card${selectedSong === file.name ? " selected" : ""}`), cover = el("button", `song-cover cover-${i % 4}`);
+      cover.setAttribute("aria-label", `查看曲目：${file.title}`);
+      cover.append(el("span", "cover-number", String(i + 1).padStart(2, "0")), el("span", "cover-note", ["♩", "♫", "♬", "♪"][i % 4]), el("span", "cover-type", "SCORE / 简谱项目"));
+      const count = file.artifactCount || file.artifacts?.length || 0;
+      const content = el("div", "song-card-body");
+      content.append(el("h3", "", file.title), el("p", "song-description", file.valid ? `${file.bpm ? "♩ = " + file.bpm + "　·　" : ""}${file.meter || "简谱"}${file.bars ? "　·　" + file.bars + " 小节" : ""}` : "项目格式待修复"));
+      const chips = el("div", "voice-chips");
+      voicesFor(file).forEach(name => chips.append(el("span", "", name)));
+      const footer = el("div", "song-card-footer"), details = el("button", "", count ? `${count} 份脚本 →` : "曲目详情 →"), edit = el("button", "song-edit", "编辑");
+      details.onclick = cover.onclick = () => { selectedSong = file.name; renderCollection(); };
+      edit.disabled = !file.valid; edit.onclick = () => openSong(file);
+      footer.append(details, edit); content.append(chips, footer); card.append(cover, content); $("libraryGrid").append(card);
+    });
+    const selected = homeFiles.find(f => f.name === selectedSong);
+    $("songDetail").hidden = !selected;
+    if (selected) renderSongDetail(selected);
+  }
+  async function openSong(file, exportAfter = false) {
+    try {
+      const result = await libraryApi(`read?name=${encodeURIComponent(file.name)}`);
+      const next = C.validateProject(result.project);
+      if (!confirm("打开此曲目会替换当前编辑草稿，请确认已保存。是否继续？")) return;
+      project = next; libraryFile = result.name; librarySha = result.sha; mount(); editorView();
+      if (exportAfter) $("openExport").click();
+    } catch (e) { $("homeStatus").textContent = e.message; }
+  }
+  function renderSongDetail(file) {
+    const detail = $("songDetail"); detail.replaceChildren();
+    const close = el("button", "detail-close", "×"); close.setAttribute("aria-label", "关闭曲目详情"); close.onclick = () => { selectedSong = null; renderCollection(); };
+    detail.append(close, el("span", "eyebrow", "SONG DETAILS"), el("h2", "", file.title), el("p", "muted", `${file.bars || "—"} 小节 · ${file.meter || "—"} · ${file.bpm ? "♩=" + file.bpm : ""}`));
+    const names = el("div", "voice-chips"); voicesFor(file).forEach(name => names.append(el("span", "", name))); detail.append(names);
+    const edit = el("button", "primary detail-edit", "打开曲谱编辑"); edit.disabled = !file.valid; edit.onclick = () => openSong(file);
+    detail.append(edit, el("h3", "", "演奏脚本"), el("p", "muted", "不同声部、不同模式的导出文件，随曲目归档。"));
+    const artifacts = file.artifacts || [];
+    if (!artifacts.length) detail.append(el("div", "artifact-empty", "还没有导出脚本。打开此曲目，选好声部后导出即可。"));
+    for (const a of artifacts) {
+      const item = el("div", "artifact-item");
+      item.append(el("strong", "", (a.voiceNames || []).join(" + ") || a.fileName || "演奏脚本"),
+        el("small", "", `${a.modeRuleCount ? "混合 / 默认" : ""}${a.mode === "hold" ? "按住" : "点按"} · ${dateLabel(a.createdAt)}`));
+      if (a.stale) item.append(el("span", "artifact-stale", "曲谱已有更新，建议重新导出"));
+      const view = el("button", "", "查看 / 下载");
+      view.onclick = async () => {
+        try {
+          const result = await libraryApi(`artifact?name=${encodeURIComponent(file.name)}&id=${encodeURIComponent(a.id)}`);
+          artifactPreview = result; $("artifactTitle").textContent = file.title;
+          $("artifactMeta").textContent = `${(a.voiceNames || []).join(" + ")} · ${a.mode === "hold" ? "按住" : "点按"}模式${a.stale ? " · 此脚本对应较早曲谱版本" : ""}`;
+          $("artifactCode").textContent = result.script; $("artifactDialog").showModal();
+        } catch (e) { $("homeStatus").textContent = e.message; }
+      };
+      item.append(view); detail.append(item);
+    }
+    const create = el("button", "detail-edit", "＋ 导出新的声部脚本"); create.disabled = !file.valid; create.onclick = () => openSong(file, true);
+    detail.append(create, el("small", "detail-filename", `项目：${file.name}${file.updatedAt ? "\n更新：" + dateLabel(file.updatedAt) : ""}`));
+  }
+  $("librarySearch").oninput = renderCollection; $("librarySort").onchange = renderCollection;
+  $("filterAll").onclick = () => { homeFilter = "all"; $("filterAll").classList.add("active"); $("filterArtifacts").classList.remove("active"); renderCollection(); };
+  $("filterArtifacts").onclick = () => { homeFilter = "artifacts"; $("filterArtifacts").classList.add("active"); $("filterAll").classList.remove("active"); renderCollection(); };
+  $("homeNew").onclick = () => $("newProject").click();
+  $("homeResume").onclick = editorView;
+  $("refreshLibrary").onclick = homeView;
+  $("homeLogin").onclick = () => { $("libraryDialog").showModal(); $("libraryStatus").textContent = "曲谱同步到公开 GitHub 曲库；AHK 制品在本机按曲目保留。"; };
+  $("downloadArtifact").onclick = () => {
+    if (artifactPreview) {
+      const meta = artifactPreview.metadata || {};
+      const name = `${meta.title || "曲谱"}-${(meta.voiceNames || []).join("+") || "声部"}-${meta.mode === "hold" ? "按住" : "点按"}.ahk`.replace(/[\\/:*?"<>|]/g, "_");
+      download(name, "\uFEFF" + artifactPreview.script.replace(/^\uFEFF/, ""), "text/plain;charset=utf-8");
+    }
+  };
   mount();
+  if (desktop) homeView();
 })();

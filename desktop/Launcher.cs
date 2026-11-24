@@ -46,25 +46,41 @@ internal class Launcher : Form {
     Launcher() {
         Text = "简谱工坊";
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
-        ClientSize = new Size(480, 245);
+        ClientSize = new Size(640, 410);
         Font = new Font("Microsoft YaHei", 10);
+        BackColor = Color.FromArgb(246, 248, 240);
         StartPosition = FormStartPosition.CenterScreen;
         FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false;
-        var title = new Label { Text = "简谱工坊 · 桌面版", AutoSize = true, Location = new Point(24, 24), Font = new Font(Font.FontFamily, 17) };
-        status = new Label { Text = "正在启动本地编辑器…", Location = new Point(24, 70), Size = new Size(430, 48) };
-        open = new Button { Text = "打开编辑器", Location = new Point(24, 130), Size = new Size(130, 38), Enabled = false };
+        var artwork = new PictureBox { Image = Icon.ToBitmap(), SizeMode = PictureBoxSizeMode.Zoom, Location = new Point(34, 34), Size = new Size(70, 70) };
+        var caption = new Label { Text = "S C O R E   S T U D I O", AutoSize = true, Location = new Point(125, 33), Font = new Font("Segoe UI", 8), ForeColor = Color.FromArgb(133, 149, 119) };
+        var title = new Label { Text = "简谱工坊", AutoSize = true, Location = new Point(120, 54), Font = new Font(Font.FontFamily, 25), ForeColor = Color.FromArgb(40, 67, 48) };
+        var subtitle = new Label { Text = "写下旋律，一起演奏。", AutoSize = true, Location = new Point(35, 130), ForeColor = Color.FromArgb(126, 141, 113), Font = new Font(Font.FontFamily, 11) };
+        var card = new Panel { BackColor = Color.White, Location = new Point(35, 170), Size = new Size(570, 75) };
+        var dot = new Label { Text = "●", Location = new Point(16, 19), Size = new Size(25, 25), ForeColor = Color.FromArgb(88, 131, 82) };
+        status = new Label { Text = "正在准备你的音乐空间…", Location = new Point(48, 16), Size = new Size(500, 49), ForeColor = Color.FromArgb(87, 107, 77) };
+        card.Controls.AddRange(new Control[] { dot, status });
+        open = new Button { Text = "打开我的曲库   →", Location = new Point(35, 269), Size = new Size(230, 47), Enabled = false,
+            FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(49, 99, 69), ForeColor = Color.White };
+        open.FlatAppearance.BorderSize = 0;
         open.Click += delegate { OpenEditor(); };
-        var scores = new Button { Text = "打开曲库文件夹", Location = new Point(164, 130), Size = new Size(140, 38) };
+        var scores = new Button { Text = "本地文件", Location = new Point(279, 269), Size = new Size(145, 47), FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = Color.FromArgb(91, 113, 78) };
+        scores.FlatAppearance.BorderColor = Color.FromArgb(220, 229, 210);
         scores.Click += delegate {
             Directory.CreateDirectory(Path.Combine(root, "scores"));
             Process.Start(new ProcessStartInfo(Path.Combine(root, "scores")) { UseShellExecute = true });
         };
-        var install = new Button { Text = "安装 AutoHotkey", Location = new Point(314, 130), Size = new Size(140, 38) };
+        var install = new Button { Text = "安装演奏环境", Location = new Point(437, 269), Size = new Size(168, 47), FlatStyle = FlatStyle.Flat, BackColor = Color.White, ForeColor = Color.FromArgb(91, 113, 78) };
+        install.FlatAppearance.BorderColor = Color.FromArgb(220, 229, 210);
         install.Click += delegate { Install(); };
-        var note = new Label { Text = "曲库：应用目录 / scores\n窗口可最小化；关闭本窗口会退出本地服务，请先保存曲谱。", Location = new Point(24, 185), Size = new Size(430, 50) };
-        Controls.AddRange(new Control[] { title, status, open, scores, install, note });
+        var note = new Label { Text = "本地优先  ·  曲库同步  ·  声部脚本归档\n启动后此窗口自动收起；双击托盘图标可重新打开。", Location = new Point(36, 344), Size = new Size(570, 48), Font = new Font(Font.FontFamily, 9), ForeColor = Color.FromArgb(146, 156, 134) };
+        Controls.AddRange(new Control[] { artwork, caption, title, subtitle, card, open, scores, install, note });
         tray = new NotifyIcon { Icon = this.Icon, Text = "简谱工坊", Visible = true };
         tray.DoubleClick += delegate { Show(); WindowState = FormWindowState.Normal; Activate(); };
+        var menu = new ContextMenuStrip();
+        menu.Items.Add("打开曲库", null, delegate { OpenEditor(); });
+        menu.Items.Add("显示启动面板", null, delegate { Show(); WindowState = FormWindowState.Normal; Activate(); });
+        menu.Items.Add("退出简谱工坊", null, delegate { Close(); });
+        tray.ContextMenuStrip = menu;
         Shown += delegate { StartServer(); };
         FormClosed += delegate {
             tray.Dispose();
@@ -85,9 +101,10 @@ internal class Launcher : Form {
                 if (e.Data != null && e.Data.StartsWith("READY ") && !IsDisposed) BeginInvoke((Action)delegate {
                     if (started) return; started = true; url = e.Data.Substring(6);
                     if (!url.StartsWith("http://127.0.0.1:")) return;
-                    status.Text = "本地编辑器已就绪。更新曲库免登录；上传需要 GitHub 授权。"; open.Enabled = true;
+                    status.Text = "曲库已就绪。\n曲谱、声部与演奏脚本，都在你的音乐空间。"; open.Enabled = true;
                     if (!HasAhkV2() && MessageBox.Show(this, "未检测到已安装的 AutoHotkey v2。\n现在打开离线安装向导吗？选“否”可先编辑曲谱。", "首次使用", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes) Install();
                     OpenEditor();
+                    Hide();
                 });
             };
             server.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e) { /* No credentials or runtime internals are shown. */ };
