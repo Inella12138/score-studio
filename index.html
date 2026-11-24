@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>简谱工坊 · Score Studio</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="core.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./index.html"><span class="brand-icon">♮</span><span>简谱工坊<small>SCORE STUDIO</small></span></a>
+    <span class="local"><i></i> 本地离线 · 无需上传</span>
+    <div class="header-actions">
+      <span id="saveStatus" role="status">草稿自动保存</span>
+      <button id="newProject">新建</button>
+      <button id="loadDemo">示例曲谱</button>
+      <button id="importProject">打开项目</button>
+      <button id="saveProject">保存项目</button>
+      <button id="openLibrary" hidden>曲库</button>
+      <button id="updateLibrary" hidden>更新曲库</button>
+      <button id="uploadLibrary" hidden>上传曲谱</button>
+      <button class="primary" id="openExport">导出 AHK <span>↗</span></button>
+    </div>
+  </header>
+  <main>
+    <section class="project-bar">
+      <div class="title-field"><span class="eyebrow">YOUR NEXT MELODY</span><input id="title" aria-label="曲名" maxlength="200"><span class="project-subtitle">让音符成形，让双手自由。</span></div>
+      <div class="project-controls">
+        <label>BPM <input id="bpm" type="number" min="1" max="400"></label>
+        <label>拍号 <input id="meter" placeholder="4/4"></label>
+        <label>装饰音间隔 <span class="input-unit"><input id="gap" type="number" min="1" max="10000"><span>ms</span></span></label>
+        <button id="settingsButton" class="settings-button">小节与键位设置 ⚙</button>
+      </div>
+    </section>
+    <section class="workspace">
+      <div class="editor-pane">
+        <div class="pane-heading"><div><span class="eyebrow">01 / COMPOSE</span><h1>写下你的旋律</h1></div><button id="addVoice">＋ 添加声部</button></div>
+        <div class="syntax-strip"><code>1</code> 一拍 <code>1-</code> 半拍 <code>1=</code> 两拍 <code>[135]</code> 和弦 <code>|</code> 小节</div>
+        <div id="voices" class="voices"></div>
+        <details class="reference" open>
+          <summary>录谱语法 <span>随手可查的音符字典</span></summary>
+          <div class="reference-grid">
+            <div><code>{ 1= 3= &amp; 19 59 39 59 }</code><span>整小节并行：各分支同时开始，独立填满小节</span></div>
+            <div><code>1` 2 · [135]=`</code><span>换气：提前松键，沿用导出的间隔与保留比例</span></div>
+            <div><code>{12345671}-</code><span>组内都是八分音符，统一写一次 -</span></div>
+            <div><code>{1234}--</code><span>组内都是十六分音符</span></div>
+            <div><code>19 · 1 · 10</code><span>低音 · 中音 · 高音</span></div>
+            <div><code>1- · 1-- · 1---</code><span>半拍 · ¼ 拍 · ⅛ 拍</span></div>
+            <div><code>1= · 1== · 1.</code><span>两拍 · 三拍 · 一拍半</span></div>
+            <div><code>0 · 0= · 0-</code><span>休止符，同样支持时值</span></div>
+            <div><code>[135] · [193959]</code><span>同时弹奏的和弦</span></div>
+            <div><code>(123) · (123)=</code><span>三连音：均分一拍 / 两拍</span></div>
+            <div><code>(10~1010)</code><span>三连音内延音：前两个高音 1 连起来</span></div>
+            <div><code>(4050&lt;40&gt;50)</code><span>三连音内倚音：在第三个音前弹高音 4</span></div>
+            <div><code>2' · 2'(40)</code><span>波浪音：2 → 3 → 2</span></div>
+            <div><code>&lt;2&gt;3 · &lt;2&gt;(40)3</code><span>前倚音：2 → 3，包含在主音时值内</span></div>
+            <div><code>[531]; · [531];(40)</code><span>琶音：依次弹奏，可指定间隔</span></div>
+            <div><code>1 | ~1 · [135] | ~[135]</code><span>延音：后一个音不重新触发</span></div>
+            <div><code>1-. · 2'- · [531];=</code><span>附点 / 装饰音可与时值组合</span></div>
+          </div>
+          <p>音符间建议加空格；三个八度仅支持自然音。BPM 与输入拍数始终以四分音符为一拍。6/8 小节因此需要填满 3 拍。</p>
+        </details>
+      </div>
+      <div class="preview-pane">
+        <div class="pane-heading"><div><span class="eyebrow">02 / READ THE MUSIC</span><h2>旋律，跃然纸上</h2></div><span id="compileBadge" class="badge">实时编译</span></div>
+        <div class="preview-toolbar"><span id="scoreMeta"></span><label>谱面缩放 <input id="zoom" type="range" min="70" max="150" value="100" aria-label="谱面缩放"></label></div>
+        <div class="score-scroll"><div id="score" class="score-paper"></div></div>
+        <div id="diagnostics" class="diagnostics" aria-live="polite"></div>
+      </div>
+    </section>
+    <footer><span>一份曲谱，多种演奏方式。</span><span id="stats">等待音符…</span></footer>
+  </main>
+  <dialog id="settingsDialog">
+    <form method="dialog" class="dialog-head"><div><span class="eyebrow">SCORE SETTINGS</span><h2>小节与键位</h2></div><button aria-label="关闭">✕</button></form>
+    <div class="dialog-body">
+      <p class="muted">全部声部共用设置。支持仅此小节、指定范围（包含首尾）、从此小节起。临时设置结束后自动恢复届时有效的曲速或拍号。</p>
+      <p class="muted">临时设置覆盖持续设置；完全包含的范围中，较小范围优先。交叉但不包含的范围会报错。BPM 始终以四分音符为一拍。</p>
+      <h3>速度变化 <small>只在小节开头生效</small></h3>
+      <div id="tempoRows"></div><button id="addTempo">＋ 添加变速</button>
+      <h3>节拍与特殊小节 <small>拍号如 2/4；也保留自定义拍数</small></h3>
+      <div id="lengthRows"></div><button id="addLength">＋ 添加特殊小节</button>
+      <h3>琴键映射 <small>每行按 1～7 顺序填写</small></h3>
+      <div class="key-rows" id="keyRows"></div>
+      <p class="muted">各声部必须填满小节，休止请显式写 0。特殊小节会在谱面标注。</p>
+      <div id="settingsStatus" class="settings-error" role="status"></div>
+    </div>
+    <div class="dialog-foot"><button id="settingsDone" class="primary">完成设置</button></div>
+  </dialog>
+  <dialog id="exportDialog">
+    <form method="dialog" class="dialog-head"><div><span class="eyebrow">READY TO PLAY</span><h2>导出演奏脚本</h2></div><button aria-label="关闭">✕</button></form>
+    <div class="dialog-body">
+      <div class="mode-options">
+        <label><input type="radio" name="mode" value="tap" checked><strong>点按模式</strong><span>点按琴键，支持倚音、波浪音与琶音</span></label>
+        <label><input type="radio" name="mode" value="hold"><strong>按住模式</strong><span>保持至时值结束；波浪音留主音，琶音留末音</span></label>
+      </div>
+      <div id="holdSettings" hidden>
+        <h3>重复音起音 <small>仅按住模式生效</small></h3>
+        <label class="setting-row">重复音松键间隔<input id="repeatGapMs" type="number" min="0" max="1000" step="1" value="30">ms</label>
+        <label class="setting-row">前音最低保留比例<input id="minHoldPercent" type="number" min="1" max="100" step="1" value="80">%</label>
+        <p class="muted">实际间隔取设置值与前音可截短时长的较小值。只提前释放需要重复的琴键，不推迟后音；显式 ~ 延音不受影响。间隔设为 0 或保留比例设为 100% 可关闭。</p>
+      </div>
+      <h3>小节模式例外 <small>只改变按键发送方式，乐器请手动切换</small></h3>
+      <div id="modeRows"></div><button id="addMode">＋ 添加小节模式</button>
+      <p class="muted">上方为默认模式。例外支持单小节、范围（含首尾）、从此小节起，作用于本次导出的所有声部。切换处释放旧模式按键；跨模式延音会在新模式重新触发，不预留额外换乐器时间。</p>
+      <h3>导出声部</h3><div class="export-choice"><label><input type="radio" name="scope" value="all" checked>全部合并</label><label><input type="radio" name="scope" value="selected">勾选声部</label></div>
+      <div id="exportVoices"></div>
+      <h3>启动方式</h3>
+      <p class="muted">脚本运行后可按 Ctrl+Win+T 呼出定时面板，每次预填当前时间，支持当前时间＋30秒 / ＋1分钟 / ＋5分钟，以及未来两分钟每隔 5 秒的绝对时间节点。无需因更改开演时间重新导出；Ctrl+Win+Esc 取消定时。</p>
+      <label class="setting-row">手动开演延迟<input id="startDelay" type="number" min="0" max="60" step="0.5" value="3">秒（0～60）</label>
+      <p class="muted">按下 Ctrl+Enter 后显示倒计时，默认等待 3 秒；曲谱中的休止照常保留。定时开始不叠加此延迟。</p>
+      <p class="muted">Ctrl+Enter 手动开始始终可用；可额外设置电脑本地时间，到点从曲首播放。不会自动校准不同机器的时钟。</p>
+      <label class="schedule-row"><input type="checkbox" id="scheduled">同时启用定时开始<input id="startTime" type="datetime-local" step="1" disabled></label>
+      <div class="hotkey-note"><kbd>Ctrl Enter</kbd> 开始 <kbd>Ctrl Win P</kbd> 暂停 / 继续 <kbd>Ctrl Win Esc</kbd> 停止并释放琴键</div>
+      <div id="exportStatus" class="diagnostics"></div>
+    </div>
+    <div class="dialog-foot"><button id="previewCode">查看脚本</button><button class="primary" id="downloadAhk">下载 .ahk ↗</button></div>
+    <pre id="codePreview" hidden></pre>
+  </dialog>
+  <input id="fileInput" type="file" accept=".json,application/json" hidden>
+  <dialog id="libraryDialog">
+    <form method="dialog" class="dialog-head"><h2>本地曲库</h2><button aria-label="关闭曲库">✕</button></form>
+    <div class="dialog-body"><p class="muted">曲谱保存在 EXE 旁的 scores 文件夹。更新免登录；上传需 GitHub 授权。</p><div id="libraryFiles"></div><p id="libraryStatus" role="status"></p></div>
+    <div class="dialog-foot"><button id="githubLogin">GitHub 登录</button></div>
+  </dialog>
+  <dialog id="uploadDialog">
+    <form method="dialog" class="dialog-head"><h2>确认公开上传</h2><button aria-label="关闭上传预览">✕</button></form>
+    <div class="dialog-body"><p class="muted">以下本地曲谱将提交到 Inella12138/score-studio 公开仓库，任何人都能查看。未保存到曲库的编辑内容不会上传。</p><div id="uploadFiles"></div><p id="uploadStatus" role="status"></p></div>
+    <div class="dialog-foot"><button id="confirmUpload" class="primary">确认上传这些曲谱</button></div>
+  </dialog>
+  <div id="toast" role="status"></div>
+</body>
+</html>

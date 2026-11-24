@@ -1,0 +1,11 @@
+此目录附带本机已有的 AutoHotkey v2.0.26 ZIP，不代表最新版。
+来源：D:\experiment\fun\AutoHotkey_2.0.26.zip（用户提供的本地副本）。
+SHA256：7AC947DD0A48C6FD71395C760E4E02B03F3916FB4387BF0416C1D5482E9C3CA8
+校验值用于检测打包后的意外损坏，不代表已独立验证发布者身份。
+原版 license.txt 保留在 ZIP 中。
+
+推荐从应用根目录双击“首次安装AutoHotkey.cmd”，输入 Y 确认后打开原版安装界面。
+也可手动解压本 ZIP 到独立目录，运行解压目录中的 Install.cmd。
+不要直接在压缩包预览中运行 Install.cmd；必须完整解压。
+安装可能处理 .ahk 关联；若 Windows 已设置其他默认打开程序，需手动选择 AutoHotkey。
+不需要为了安装本应用而卸载已有 AutoHotkey；已能运行 v2 脚本的电脑通常可跳过首次安装。
