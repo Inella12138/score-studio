@@ -3,6 +3,7 @@ const { execFile } = require("node:child_process");
 const { promisify } = require("node:util");
 const exec = promisify(execFile);
 const OWNER = "Inella12138", REPO = "score-studio", BRANCH = "main";
+const GIT_INSTALL = "https://git-scm.com/install/windows";
 async function credential() {
   return new Promise((resolve, reject) => {
     const child = require("node:child_process").spawn("git", ["credential", "fill"], {
@@ -14,7 +15,7 @@ async function credential() {
     child.stdin.on("error", () => {});
     child.stdout.on("data", data => out += data);
     child.stderr.resume();
-    child.on("error", () => { clearTimeout(timeout); reject(new Error("上传需要安装 Git for Windows 并登录 GitHub；更新曲库不需要登录。")); });
+    child.on("error", () => { clearTimeout(timeout); reject(new Error(`上传需要安装 Git for Windows 并登录 GitHub。官方下载：${GIT_INSTALL}；更新曲库不需要登录。`)); });
     child.on("close", code => {
       clearTimeout(timeout);
       const line = out.split(/\r?\n/).find(s => s.startsWith("password="));
@@ -66,7 +67,7 @@ async function blob(sha, token) {
 async function login() {
   // Browser authorization stays in Git Credential Manager; no token reaches the page.
   try { await exec("git", ["credential-manager", "github", "login", "--browser"], { windowsHide: true, timeout: 300000 }); }
-  catch { throw new Error("GitHub 登录未完成；上传需要 Git for Windows 与 Git Credential Manager，请重试浏览器授权。"); }
+  catch { throw new Error(`GitHub 登录未完成；上传需要 Git for Windows 与 Git Credential Manager。官方下载：${GIT_INSTALL}。安装后请重启应用，再重试浏览器授权。`); }
   const token = await credential();
   const user = await api("/user", { token });
   return { login: user.login };

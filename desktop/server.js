@@ -1,6 +1,8 @@
 "use strict";
 const http = require("node:http"), fs = require("node:fs/promises"), path = require("node:path"), crypto = require("node:crypto");
 const { Library } = require("./library"), github = require("./github");
+const childProcess = require("node:child_process");
+const { checkedPath } = require("./artifacts");
 const ROOT = path.resolve(__dirname, "..");
 function createServer(root = ROOT) {
   const library = new Library(root), token = crypto.randomBytes(32).toString("hex");
@@ -33,6 +35,15 @@ function createServer(root = ROOT) {
       if (url.pathname === "/api/artifacts/export" && req.method === "POST") return json(200, await library.artifacts.export(body));
       if (url.pathname === "/api/artifacts" && req.method === "GET") return json(200, { artifacts: await library.artifacts.list(url.searchParams.get("name")) });
       if (url.pathname === "/api/artifact" && req.method === "GET") return json(200, await library.artifacts.read(url.searchParams.get("name"), url.searchParams.get("id")));
+      if (url.pathname === "/api/artifacts/reveal" && req.method === "POST") {
+        const { metadata } = await library.artifacts.read(body.name, body.id);
+        const file = await checkedPath(root, path.join(root, metadata.relativePath));
+        await new Promise((resolve, reject) => childProcess.execFile("explorer.exe", [`/select,${file}`],
+          { windowsHide: true }, error => error ? reject(error) : resolve()));
+        return json(200, { revealed: true, id: metadata.id, fileName: metadata.fileName, relativePath: metadata.relativePath });
+      }
+      if (url.pathname === "/api/artifacts/delete" && req.method === "POST") return json(200, await library.artifacts.remove(body.name, body.id));
+      if (url.pathname === "/api/artifacts/clean-stale" && req.method === "POST") return json(200, await library.artifacts.cleanStale(body.name));
       if (url.pathname === "/api/save" && req.method === "POST") return json(200, await library.save(body.name, body.project, body.expectedSha));
       if (url.pathname === "/api/update" && req.method === "POST") return json(200, await library.update());
       if (url.pathname === "/api/preview" && req.method === "POST") return json(200, await library.prepare());

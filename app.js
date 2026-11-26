@@ -553,7 +553,7 @@
         const saved = await saveToLibrary();
         if (project !== snapshot) throw new Error("当前项目已切换，请重新导出");
         await libraryApi("artifacts/export", { name: saved.name, expectedSha: saved.sha, project: snapshot, selected, mode, options });
-        toast("演奏脚本已归档到此曲目的制品列表，可在曲库查看或下载");
+        toast("演奏脚本已用可读文件名保存到 scores 内，可在曲目详情定位，无需重复下载");
         $("exportDialog").close();
       } catch (e) { $("exportStatus").textContent = e.message; }
       finally { $("downloadAhk").disabled = false; }
@@ -677,12 +677,26 @@
     detail.append(edit, el("h3", "", "演奏脚本"), el("p", "muted", "不同声部、不同模式的导出文件，随曲目归档。"));
     const artifacts = file.artifacts || [];
     if (!artifacts.length) detail.append(el("div", "artifact-empty", "还没有导出脚本。打开此曲目，选好声部后导出即可。"));
+    const staleCount = artifacts.filter(a => a.stale).length;
+    if (staleCount) {
+      const clean = el("button", "artifact-clean", `清理本曲过期脚本（${staleCount} 份）`);
+      clean.onclick = async () => {
+        if (!confirm(`将「${file.title}」目前过期的 ${staleCount} 份脚本移到本地回收区，保留当前版本脚本。是否继续？`)) return;
+        clean.disabled = true;
+        try {
+          const result = await libraryApi("artifacts/clean-stale", { name: file.name });
+          await showLibrary(); toast(result.message || "已清理过期脚本；文件保留在 .local/artifact-trash");
+        } catch (e) { $("homeStatus").textContent = e.message; clean.disabled = false; }
+      };
+      detail.append(clean);
+    }
     for (const a of artifacts) {
       const item = el("div", "artifact-item");
       item.append(el("strong", "", (a.voiceNames || []).join(" + ") || a.fileName || "演奏脚本"),
         el("small", "", `${a.modeRuleCount ? "混合 / 默认" : ""}${a.mode === "hold" ? "按住" : "点按"} · ${dateLabel(a.createdAt)}`));
       if (a.stale) item.append(el("span", "artifact-stale", "曲谱已有更新，建议重新导出"));
-      const view = el("button", "", "查看 / 下载");
+      if (a.fileName) item.append(el("span", "artifact-location", a.fileName));
+      const actions = el("div", "artifact-actions"), view = el("button", "", "预览");
       view.onclick = async () => {
         try {
           const result = await libraryApi(`artifact?name=${encodeURIComponent(file.name)}&id=${encodeURIComponent(a.id)}`);
@@ -691,7 +705,23 @@
           $("artifactCode").textContent = result.script; $("artifactDialog").showModal();
         } catch (e) { $("homeStatus").textContent = e.message; }
       };
-      item.append(view); detail.append(item);
+      const reveal = el("button", "", "定位文件");
+      reveal.onclick = async () => {
+        reveal.disabled = true;
+        try { await libraryApi("artifacts/reveal", { name: file.name, id: a.id }); toast("已在文件管理器中选中脚本，直接使用此文件即可"); }
+        catch (e) { $("homeStatus").textContent = e.message; }
+        finally { reveal.disabled = false; }
+      };
+      const remove = el("button", "danger", "删除");
+      remove.onclick = async () => {
+        if (!confirm(`删除「${file.title}」的 ${(a.voiceNames || []).join(" + ")} 演奏脚本？文件会先移到本地回收区。`)) return;
+        remove.disabled = true;
+        try {
+          const result = await libraryApi("artifacts/delete", { name: file.name, id: a.id });
+          await showLibrary(); toast(result.message || "已移到本地回收区 .local/artifact-trash");
+        } catch (e) { $("homeStatus").textContent = e.message; remove.disabled = false; }
+      };
+      actions.append(view, reveal, remove); item.append(actions); detail.append(item);
     }
     const create = el("button", "detail-edit", "＋ 导出新的声部脚本"); create.disabled = !file.valid; create.onclick = () => openSong(file, true);
     detail.append(create, el("small", "detail-filename", `项目：${file.name}${file.updatedAt ? "\n更新：" + dateLabel(file.updatedAt) : ""}`));
@@ -703,11 +733,12 @@
   $("homeResume").onclick = editorView;
   $("refreshLibrary").onclick = homeView;
   $("homeLogin").onclick = () => { $("libraryDialog").showModal(); $("libraryStatus").textContent = "曲谱同步到公开 GitHub 曲库；AHK 制品在本机按曲目保留。"; };
-  $("downloadArtifact").onclick = () => {
+  $("downloadArtifact").textContent = "定位已有脚本（无需下载）";
+  $("downloadArtifact").onclick = async () => {
     if (artifactPreview) {
       const meta = artifactPreview.metadata || {};
-      const name = `${meta.title || "曲谱"}-${(meta.voiceNames || []).join("+") || "声部"}-${meta.mode === "hold" ? "按住" : "点按"}.ahk`.replace(/[\\/:*?"<>|]/g, "_");
-      download(name, "\uFEFF" + artifactPreview.script.replace(/^\uFEFF/, ""), "text/plain;charset=utf-8");
+      try { await libraryApi("artifacts/reveal", { name: meta.scoreName, id: meta.id }); toast("已定位曲库中的脚本文件"); }
+      catch (e) { $("artifactMeta").textContent = e.message; }
     }
   };
   mount();

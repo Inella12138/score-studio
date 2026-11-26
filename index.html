@@ -31,7 +31,7 @@
       <h2>我的音乐空间</h2>
       <button id="filterAll" class="sidebar-nav active"><span>♩</span> 全部曲谱 <b id="navScoreCount">0</b></button>
       <button id="filterArtifacts" class="sidebar-nav"><span>≡</span> 演奏脚本 <b id="navArtifactCount">0</b></button>
-      <div class="sidebar-note"><span class="eyebrow">KEEP YOUR MUSIC CLOSE</span><p>从一行简谱，到一次合奏。</p><small>曲谱保存在 scores<br>演奏脚本按曲目归档在 artifacts</small></div>
+      <div class="sidebar-note"><span class="eyebrow">KEEP YOUR MUSIC CLOSE</span><p>从一行简谱，到一次合奏。</p><small>曲谱保存在 scores<br>脚本在曲库内按曲目直接归档</small></div>
       <button id="homeLogin" class="sidebar-account">GitHub 账号与同步 →</button>
     </aside>
     <div class="library-content">
@@ -41,7 +41,7 @@
       <p id="homeStatus" class="home-status" role="status"></p>
       <div id="libraryEmpty" class="library-empty" hidden><span>♩</span><h3>为你的曲库添上第一段旋律</h3><p>新建一首曲谱，或从“打开项目”导入已有的 score 文件。</p></div>
       <div class="collection-layout"><div id="libraryGrid" class="library-grid"></div><aside id="songDetail" class="song-detail" hidden></aside></div>
-      <p class="library-footnote">本地编辑 · 曲谱可同步到 GitHub · 演奏脚本按曲目保存在本机</p>
+      <p class="library-footnote">本地编辑 · 曲谱可同步到 GitHub · 脚本直接保存在曲库内，无需重复下载</p>
     </div>
   </section>
   <main id="editorMain">
@@ -141,12 +141,12 @@
   <input id="fileInput" type="file" accept=".json,application/json" hidden>
   <dialog id="libraryDialog">
     <form method="dialog" class="dialog-head"><h2>本地曲库</h2><button aria-label="关闭曲库">✕</button></form>
-    <div class="dialog-body"><p class="muted">曲谱保存在 EXE 旁的 scores 文件夹。更新免登录；上传需 GitHub 授权。</p><div id="libraryFiles"></div><p id="libraryStatus" role="status"></p></div>
+    <div class="dialog-body"><p class="muted">曲谱保存在 EXE 旁的 scores 文件夹。更新免登录；上传需 GitHub 授权。</p><p class="git-install-help">还没有 Git？<a href="https://git-scm.com/install/windows" target="_blank" rel="noopener noreferrer">下载 Git for Windows（官方网站）↗</a><br><small>安装时保留 Git Credential Manager，安装完成后重新启动本应用，再点“GitHub 登录”。只更新曲库不需要安装 Git。</small></p><div id="libraryFiles"></div><p id="libraryStatus" role="status"></p></div>
     <div class="dialog-foot"><button id="githubLogin">GitHub 登录</button></div>
   </dialog>
   <dialog id="uploadDialog">
     <form method="dialog" class="dialog-head"><h2>确认公开上传</h2><button aria-label="关闭上传预览">✕</button></form>
-    <div class="dialog-body"><p class="muted">以下本地曲谱将提交到 Inella12138/score-studio 公开仓库，任何人都能查看。未保存到曲库的编辑内容不会上传。</p><div id="uploadFiles"></div><p id="uploadStatus" role="status"></p></div>
+    <div class="dialog-body"><p class="muted">以下本地曲谱将提交到 Inella12138/score-studio 公开仓库，任何人都能查看。未保存到曲库的编辑内容不会上传。</p><p class="git-install-help">首次上传需安装 Git。<a href="https://git-scm.com/install/windows" target="_blank" rel="noopener noreferrer">前往 Git for Windows 官方下载页 ↗</a><br><small>安装后重启应用，在“GitHub 账号与同步”中完成登录。</small></p><div id="uploadFiles"></div><p id="uploadStatus" role="status"></p></div>
     <div class="dialog-foot"><button id="confirmUpload" class="primary">确认上传这些曲谱</button></div>
   </dialog>
   <dialog id="artifactDialog"><form method="dialog" class="dialog-head"><div><span class="eyebrow">PERFORMANCE FILE</span><h2 id="artifactTitle">演奏脚本</h2></div><button aria-label="关闭脚本预览">✕</button></form><div class="dialog-body"><p id="artifactMeta" class="muted"></p><pre id="artifactCode" class="artifact-code"></pre></div><div class="dialog-foot"><button id="downloadArtifact" class="primary">下载 AHK 文件</button></div></dialog>

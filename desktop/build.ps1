@@ -25,7 +25,14 @@ if ($Package) {
     $files = @('ScoreStudio.exe','index.html','app.js','core.js','style.css','README.md','install-autohotkey.ps1',
         'installers\AutoHotkey_2.0.26.zip',
         'bin\node.exe','bin\LICENSE-node.txt','desktop\server.js','desktop\github.js','desktop\library.js','desktop\artifacts.js','desktop\contributions.js','assets\app.ico','assets\icon.png')
-    $files += Get-ChildItem -LiteralPath (Join-Path $root 'scores') -File -Filter '*.score.json' | ForEach-Object { 'scores\' + $_.Name }
+    if ((Test-Path -LiteralPath (Join-Path $root '.git')) -and (Get-Command git.exe -ErrorAction SilentlyContinue)) {
+        # Do not publish untracked personal scores in the application release.
+        $tracked = & git.exe -C $root -c core.quotepath=false ls-files -- 'scores/*.score.json'
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate published scores.' }
+        $files += $tracked | ForEach-Object { $_.Replace('/', '\') }
+    } else {
+        $files += Get-ChildItem -LiteralPath (Join-Path $root 'scores') -File -Filter '*.score.json' | ForEach-Object { 'scores\' + $_.Name }
+    }
     $files += Get-ChildItem -LiteralPath $root -File -Filter '*.cmd' | ForEach-Object { $_.Name }
     $files += Get-ChildItem -LiteralPath (Join-Path $root 'installers') -File -Filter '*.txt' | ForEach-Object { 'installers\' + $_.Name }
     $zip = [IO.Compression.ZipFile]::Open($output, [IO.Compression.ZipArchiveMode]::Create)
