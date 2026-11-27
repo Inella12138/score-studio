@@ -96,7 +96,7 @@ class Artifacts {
     return { storage, scriptPath, metadataPath, data, metadata: m };
   }
   describe(entry, currentSha) {
-    return { ...entry.metadata, location: entry.storage.location, relativePath: this.relative(entry.scriptPath),
+    return { ...entry.metadata, location: entry.storage.location, relativePath: this.relative(entry.scriptPath), absolutePath: path.resolve(entry.scriptPath),
       stale: entry.metadata.sourceSha !== currentSha };
   }
   async locate(name, id) {
@@ -251,10 +251,15 @@ class Artifacts {
       const voiceNames = saved.project.voices.filter(v => selected.includes(v.id)).map(v => v.name);
       let label = readable(saved.project.title, "score") + "-" + readable(voiceNames.join("+"), "voices");
       if (DEVICE_FILE.test(label)) label = "score-" + label;
+      const suffix = `-${mode}-${id.slice(0, 8)}.ahk`;
+      const available = Math.min(220 - Buffer.byteLength(suffix), 248 - path.resolve(dir).length - 1 - suffix.length);
+      if (available < 8 || path.join(dir, `${id}.json`).length > 248)
+        throw new Error("应用所在目录过长，Windows 无法可靠定位导出文件。请将完整应用移到较短路径，例如 D:\\ScoreStudio。");
+      label = truncate(label, available).replace(/[. ]+$/, "") || "score";
       const metadata = { id, title: saved.project.title, scoreName: name, sourceSha: saved.sha,
         voiceNames,
         mode, modeRuleCount: (saved.project.modes || []).length,
-        createdAt: new Date().toISOString(), fileName: `${label}-${mode}-${id.slice(0, 8)}.ahk`, size };
+        createdAt: new Date().toISOString(), fileName: `${label}${suffix}`, size };
       const json = JSON.stringify(metadata, null, 2) + "\n";
       if (Buffer.byteLength(json) > MAX_METADATA) throw new Error("Artifact metadata is too large");
       await checkedPath(this.root, dir);
@@ -266,6 +271,12 @@ class Artifacts {
       await fs.writeFile(scriptPath, script, { encoding: "utf8", flag: "wx" });
       try { await fs.writeFile(metadataPath, json, { encoding: "utf8", flag: "wx" }); }
       catch (e) { await fs.unlink(scriptPath).catch(() => {}); throw e; }
+      try {
+        const verified = await this.load(name, id, { dir, location: "scores" });
+        if (!verified.data.equals(Buffer.from(script, "utf8"))) throw new Error("导出文件读取校验失败");
+      } catch (e) {
+        await fs.unlink(metadataPath).catch(() => {}); await fs.unlink(scriptPath).catch(() => {}); throw e;
+      }
       return { script, metadata: this.describe({ metadata, scriptPath, storage: { location: "scores" } }, saved.sha) };
     });
   }

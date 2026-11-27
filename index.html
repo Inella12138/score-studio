@@ -6,11 +6,13 @@
   <title>简谱工坊 · Score Studio</title>
   <link rel="icon" type="image/png" href="assets/icon.png">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="explorer.css">
   <script defer src="core.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
   <header class="topbar">
+    <button id="toggleSidebar" class="sidebar-toggle" aria-label="收起曲库侧边栏" aria-expanded="true" aria-controls="libraryHome" hidden>☰</button>
     <a class="brand" href="./index.html"><span class="brand-icon">♮</span><span>简谱工坊<small>SCORE STUDIO</small></span></a>
     <span class="local"><i></i> 本地离线 · 无需上传</span>
     <div class="header-actions">
@@ -20,30 +22,19 @@
       <button id="importProject">打开项目</button>
       <button id="saveProject">保存项目</button>
       <button id="openLibrary" hidden>曲库</button>
-      <button id="updateLibrary" hidden>更新曲库</button>
-      <button id="uploadLibrary" hidden>上传曲谱</button>
       <button class="primary" id="openExport">导出 AHK <span>↗</span></button>
     </div>
   </header>
-  <section id="libraryHome" class="library-home" hidden>
-    <aside class="library-sidebar">
-      <div class="sidebar-caption">MY WORKSPACE</div>
-      <h2>我的音乐空间</h2>
-      <button id="filterAll" class="sidebar-nav active"><span>♩</span> 全部曲谱 <b id="navScoreCount">0</b></button>
-      <button id="filterArtifacts" class="sidebar-nav"><span>≡</span> 演奏脚本 <b id="navArtifactCount">0</b></button>
-      <div class="sidebar-note"><span class="eyebrow">KEEP YOUR MUSIC CLOSE</span><p>从一行简谱，到一次合奏。</p><small>曲谱保存在 scores<br>脚本在曲库内按曲目直接归档</small></div>
-      <button id="homeLogin" class="sidebar-account">GitHub 账号与同步 →</button>
-    </aside>
-    <div class="library-content">
-      <div class="library-welcome"><div><span class="eyebrow">YOUR PERSONAL SCORE COLLECTION</span><h1>每一段旋律，都有归处。</h1><p>整理曲谱，编排声部，为下一次合奏做好准备。</p></div><div class="home-create-actions"><button id="homeResume">继续编辑草稿</button><button id="homeNew" class="primary">＋ 新建曲谱</button></div></div>
-      <div class="library-banner"><div><span class="banner-kicker">SCORE STUDIO / 曲库</span><h2>写下旋律，一起演奏。</h2><p>曲谱与不同声部的演奏脚本，在这里井然有序。</p><div class="banner-stats"><strong id="homeScoreCount">0</strong> 首曲谱 <i></i><strong id="homeVoiceCount">0</strong> 个声部 <i></i><strong id="homeArtifactCount">0</strong> 份演奏脚本</div></div><img src="assets/icon.png" alt="简谱工坊竖琴图标"></div>
-      <div class="library-tools"><div><h2 id="collectionHeading">全部曲谱</h2><span id="collectionCount"></span></div><label class="library-search"><span>⌕</span><input id="librarySearch" placeholder="搜索曲名或声部…" aria-label="搜索曲库"></label><select id="librarySort" aria-label="曲库排序"><option value="name">按曲名</option><option value="recent">最近修改</option></select><button id="refreshLibrary" title="刷新本地列表">↻</button></div>
-      <p id="homeStatus" class="home-status" role="status"></p>
-      <div id="libraryEmpty" class="library-empty" hidden><span>♩</span><h3>为你的曲库添上第一段旋律</h3><p>新建一首曲谱，或从“打开项目”导入已有的 score 文件。</p></div>
-      <div class="collection-layout"><div id="libraryGrid" class="library-grid"></div><aside id="songDetail" class="song-detail" hidden></aside></div>
-      <p class="library-footnote">本地编辑 · 曲谱可同步到 GitHub · 脚本直接保存在曲库内，无需重复下载</p>
-    </div>
-  </section>
+  <aside id="libraryHome" class="score-explorer" hidden aria-label="曲库侧边栏">
+    <div class="explorer-heading"><div><span class="eyebrow">EXPLORER</span><h2>曲库</h2></div><div class="explorer-heading-actions"><button id="homeNew" title="新建曲谱" aria-label="从曲库新建曲谱">＋</button><button id="refreshLibrary" title="刷新本地列表" aria-label="刷新曲库">↻</button></div></div>
+    <label class="explorer-search"><span>⌕</span><input id="librarySearch" placeholder="搜索曲名或声部…" aria-label="搜索曲库"></label>
+    <div class="explorer-filter"><button id="filterAll" class="active">曲谱 <b id="navScoreCount">0</b></button><button id="filterArtifacts">有脚本 <b id="navArtifactCount">0</b></button><select id="librarySort" aria-label="曲库排序"><option value="name">按曲名</option><option value="recent">最近修改</option></select></div>
+    <div class="explorer-section-label"><span id="collectionHeading">全部曲谱</span><span id="collectionCount"></span></div>
+    <p id="homeStatus" class="home-status" role="status"></p>
+    <div id="libraryEmpty" class="explorer-empty" hidden>没有匹配的曲谱。可以新建，或打开已有项目后保存到曲库。</div>
+    <div id="libraryGrid" class="score-tree" role="tree" aria-label="曲谱与演奏脚本"></div>
+    <div class="explorer-footer"><div class="explorer-sync"><button id="updateLibrary" hidden>↓ 更新曲库</button><button id="uploadLibrary" hidden>↑ 上传曲谱</button></div><button id="homeLogin">GitHub 账号与同步</button><button id="openArtifactTrash">本地回收区</button><p>展开曲谱查看演奏脚本<br>点击曲名，在右侧继续编辑</p></div>
+  </aside>
   <main id="editorMain">
     <section class="project-bar">
       <div class="title-field"><span class="eyebrow">YOUR NEXT MELODY</span><input id="title" aria-label="曲名" maxlength="200"><span class="project-subtitle">让音符成形，让双手自由。</span></div>
@@ -149,7 +140,8 @@
     <div class="dialog-body"><p class="muted">以下本地曲谱将提交到 Inella12138/score-studio 公开仓库，任何人都能查看。未保存到曲库的编辑内容不会上传。</p><p class="git-install-help">首次上传需安装 Git。<a href="https://git-scm.com/install/windows" target="_blank" rel="noopener noreferrer">前往 Git for Windows 官方下载页 ↗</a><br><small>安装后重启应用，在“GitHub 账号与同步”中完成登录。</small></p><div id="uploadFiles"></div><p id="uploadStatus" role="status"></p></div>
     <div class="dialog-foot"><button id="confirmUpload" class="primary">确认上传这些曲谱</button></div>
   </dialog>
-  <dialog id="artifactDialog"><form method="dialog" class="dialog-head"><div><span class="eyebrow">PERFORMANCE FILE</span><h2 id="artifactTitle">演奏脚本</h2></div><button aria-label="关闭脚本预览">✕</button></form><div class="dialog-body"><p id="artifactMeta" class="muted"></p><pre id="artifactCode" class="artifact-code"></pre></div><div class="dialog-foot"><button id="downloadArtifact" class="primary">下载 AHK 文件</button></div></dialog>
+  <dialog id="artifactDialog"><form method="dialog" class="dialog-head"><div><span class="eyebrow">PERFORMANCE FILE</span><h2 id="artifactTitle">演奏脚本</h2></div><button aria-label="关闭脚本预览">✕</button></form><div class="dialog-body"><p id="artifactMeta" class="muted"></p><label class="artifact-path-label" for="artifactPath">保存位置</label><input id="artifactPath" class="artifact-path" readonly><p id="artifactActionStatus" class="muted" role="status"></p><pre id="artifactCode" class="artifact-code"></pre></div><div class="dialog-foot"><button id="copyArtifactPath">复制完整路径</button><button id="downloadArtifact" class="primary">定位文件</button></div></dialog>
+  <dialog id="trashDialog"><form method="dialog" class="dialog-head"><div><span class="eyebrow">LOCAL RECYCLE BIN</span><h2>本地回收区</h2></div><button aria-label="关闭本地回收区">✕</button></form><div class="dialog-body"><p class="muted">已删除的演奏脚本及其恢复清单保存在此处。清空将永久删除，无法撤销；正在使用的曲谱和脚本不会受影响。</p><p id="trashSummary"></p><p id="trashStatus" role="status"></p></div><div class="dialog-foot"><button id="emptyArtifactTrash">清空回收区</button></div></dialog>
   <div id="toast" role="status"></div>
 </body>
 </html>

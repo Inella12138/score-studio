@@ -12,6 +12,10 @@ if (!$SkipCompile) {
 $nodePath = (Get-Command node.exe -ErrorAction Stop).Source
 $bin = Join-Path $root 'bin'
 New-Item -ItemType Directory -Path $bin -Force | Out-Null
+& $compiler /nologo /target:winexe /platform:anycpu /optimize+ /out:$(Join-Path $bin 'ScoreFileReveal.exe') (Join-Path $PSScriptRoot 'FileReveal.cs')
+if ($LASTEXITCODE -ne 0) { throw 'File reveal helper build failed' }
+& $compiler /nologo /target:exe /platform:anycpu /optimize+ /reference:System.Runtime.Serialization.dll /out:$(Join-Path $bin 'ScoreTrashDelete.exe') (Join-Path $PSScriptRoot 'TrashDelete.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Recycle-bin helper build failed' }
 $bundledNode = Join-Path $bin 'node.exe'
 if (!(Test-Path -LiteralPath $bundledNode) -or (Get-FileHash -LiteralPath $nodePath).Hash -ne (Get-FileHash -LiteralPath $bundledNode).Hash) {
     Copy-Item -LiteralPath $nodePath -Destination $bundledNode -Force
@@ -22,9 +26,9 @@ if ($Package) {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     $name = 'score-studio-desktop-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.zip'
     $output = Join-Path (Split-Path $root -Parent) $name
-    $files = @('ScoreStudio.exe','index.html','app.js','core.js','style.css','README.md','install-autohotkey.ps1',
+    $files = @('ScoreStudio.exe','index.html','app.js','core.js','style.css','explorer.css','README.md','install-autohotkey.ps1',
         'installers\AutoHotkey_2.0.26.zip',
-        'bin\node.exe','bin\LICENSE-node.txt','desktop\server.js','desktop\github.js','desktop\library.js','desktop\artifacts.js','desktop\contributions.js','assets\app.ico','assets\icon.png')
+        'bin\node.exe','bin\LICENSE-node.txt','bin\ScoreFileReveal.exe','bin\ScoreTrashDelete.exe','desktop\server.js','desktop\github.js','desktop\library.js','desktop\artifacts.js','desktop\trash.js','desktop\contributions.js','assets\app.ico','assets\icon.png')
     if ((Test-Path -LiteralPath (Join-Path $root '.git')) -and (Get-Command git.exe -ErrorAction SilentlyContinue)) {
         # Do not publish untracked personal scores in the application release.
         $tracked = & git.exe -C $root -c core.quotepath=false ls-files -- 'scores/*.score.json'

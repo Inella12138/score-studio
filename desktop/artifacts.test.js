@@ -41,6 +41,7 @@ test("exports immutable local script pairs using core ordering and score voice o
     assert.match(result.metadata.fileName, new RegExp(`^本地曲目-旋律\\+低音-${mode}-${result.metadata.id.slice(0, 8)}\\.ahk$`));
     assert.equal(result.metadata.location, "scores");
     assert.equal(result.metadata.relativePath, `scores/song.exports/${result.metadata.fileName}`);
+    assert.equal(result.metadata.absolutePath, path.join(dir, result.metadata.fileName));
     assert.deepEqual((await fs.readFile(path.join(dir, result.metadata.fileName))).subarray(0, 3), Buffer.from([0xef, 0xbb, 0xbf]));
     assert.equal(await fs.readFile(path.join(dir, result.metadata.fileName), "utf8"), expected);
     const stored = JSON.parse(await fs.readFile(path.join(dir, `${result.metadata.id}.json`), "utf8"));
@@ -154,6 +155,20 @@ test("readable names sanitize Windows characters and bound Unicode titles and sc
   assert.match(folder, /\.exports$/);
   assert.notEqual(library.artifacts.directory(long), library.artifacts.directory(folder.slice(0, -8) + ".score.json"));
   assert.notEqual(library.artifacts.directory(long), library.artifacts.directory("曲".repeat(79) + "歌.score.json"));
+});
+test("export paths support user song punctuation and remain directly readable by Windows", async t => {
+  const { library, request, project } = await fixture(t);
+  for (const title of ["O Strings, My Strings 琴弦呀，琴弦", "A & B (合奏) #1", "CON. <谱>:\"/\\|?*", "😀" + "琴".repeat(70)]) {
+    const name = "path-" + Buffer.from(title).toString("hex").slice(0, 20) + ".score.json";
+    const next = { ...project, title };
+    const saved = await library.save(name, next);
+    const result = await library.artifacts.export({ ...request, name, expectedSha: saved.sha, project: next });
+    const full = path.join(library.root, result.metadata.relativePath);
+    assert.ok(full.length <= 248, full);
+    const handle = await fs.open(full, "r"); await handle.close();
+    assert.equal((await library.artifacts.read(name, result.metadata.id)).script, result.script);
+    assert.doesNotMatch(result.metadata.fileName, /[<>:"/\\|?*\x00-\x1f]/);
+  }
 });
 test("legacy and named variants coexist without duplicate IDs and are both recoverably removable", async t => {
   const { root, library, request } = await fixture(t);
@@ -453,11 +468,13 @@ test("artifact HTTP routes preserve existing local authorization and expose no e
   assert.equal(launches.length, 0);
   const metadataPath = path.join(library.artifacts.directory(request.name), `${metadata.id}.json`);
   const stored = JSON.parse(await fs.readFile(metadataPath, "utf8"));
-  await fs.writeFile(metadataPath, JSON.stringify({ ...stored, location: "../other", relativePath: "../outside.ahk" }));
+  await fs.writeFile(metadataPath, JSON.stringify({ ...stored, location: "../other", relativePath: "../outside.ahk", absolutePath: "C:\\outside.ahk" }));
   const reveal = await postTo("/api/artifacts/reveal", body);
   assert.equal(reveal.status, 200);
-  assert.equal((await reveal.json()).relativePath, metadata.relativePath);
-  assert.deepEqual(launches, [{ executable: "explorer.exe", args: [`/select,${path.join(root, metadata.relativePath)}`], options: { windowsHide: true } }]);
+  const revealed = await reveal.json();
+  assert.equal(revealed.relativePath, metadata.relativePath);
+  assert.equal(revealed.absolutePath, path.join(root, metadata.relativePath));
+  assert.deepEqual(launches, [{ executable: path.join(root, "bin", "ScoreFileReveal.exe"), args: [path.join(root, metadata.relativePath)], options: { windowsHide: true, timeout: 15000 } }]);
   for (const route of ["/api/artifacts/reveal", "/api/artifacts/delete"])
     for (const id of ["../bad", "..\\bad", null, crypto.randomUUID()])
       assert.equal((await postTo(route, { ...body, id })).status, 400);
@@ -476,7 +493,7 @@ test("artifact HTTP routes preserve existing local authorization and expose no e
   launchError = new Error("Explorer unavailable");
   const failedReveal = await postTo("/api/artifacts/reveal", currentBody);
   assert.equal(failedReveal.status, 400);
-  assert.equal((await failedReveal.json()).error, launchError.message);
+  assert.match((await failedReveal.json()).error, /Windows 无法定位此文件/);
   assert.equal((await library.artifacts.list(request.name)).length, 1);
   launchError = null;
   const deleted = await postTo("/api/artifacts/delete", currentBody);
@@ -489,7 +506,7 @@ test("artifact HTTP routes preserve existing local authorization and expose no e
   assert.deepEqual(await library.artifacts.list(request.name), []);
   const legacy = await legacyPair(library, request);
   assert.equal((await postTo("/api/artifacts/reveal", { name: request.name, id: legacy.metadata.id })).status, 200);
-  assert.deepEqual(launches.at(-1).args, [`/select,${path.join(legacy.dir, legacy.metadata.fileName)}`]);
+  assert.deepEqual(launches.at(-1).args, [path.join(legacy.dir, legacy.metadata.fileName)]);
   assert.equal((await postTo("/api/artifacts/delete", { name: request.name, id: legacy.metadata.id })).status, 200);
   assert.equal((await post({ ...request, project: { ...request.project, bpm: 100 } })).status, 400);
   assert.equal((await fetch(base + "/api/artifact?name=song.score.json&id=../bad", { headers })).status, 400);

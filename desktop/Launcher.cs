@@ -81,7 +81,7 @@ internal class Launcher : Form {
         menu.Items.Add("打开曲库", null, delegate { OpenEditor(); });
         menu.Items.Add("显示启动面板", null, delegate { Show(); WindowState = FormWindowState.Normal; Activate(); });
         menu.Items.Add("退出简谱工坊", null, delegate {
-            if (MessageBox.Show("退出会停止曲库服务。请确认曲谱已保存。", "退出简谱工坊", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
+            if (MessageBox.Show("退出会关闭编辑页面并停止曲库服务。请确认曲谱已保存。", "退出简谱工坊", MessageBoxButtons.OKCancel, MessageBoxIcon.Question) == DialogResult.OK) {
                 exiting = true; Close();
             }
         });
@@ -92,7 +92,15 @@ internal class Launcher : Form {
         Shown += delegate { StartServer(); };
         FormClosed += delegate {
             tray.Dispose();
-            try { if (server != null && !server.HasExited) server.Kill(); } catch {}
+            try {
+                if (server != null && !server.HasExited) {
+                    server.StandardInput.WriteLine("SHUTDOWN");
+                    server.StandardInput.Flush();
+                    if (!server.WaitForExit(3000)) server.Kill();
+                }
+            } catch {
+                try { if (server != null && !server.HasExited) server.Kill(); } catch {}
+            }
         };
     }
     void StartServer() {
@@ -102,7 +110,7 @@ internal class Launcher : Form {
             if (!File.Exists(node)) throw new Exception("缺少运行环境 bin/node.exe。请完整解压桌面发行包，或运行 desktop/build.ps1。");
             server = new Process { StartInfo = new ProcessStartInfo(node, "\"" + Path.Combine(root, "desktop", "server.js") + "\"") {
                 WorkingDirectory = root, UseShellExecute = false, CreateNoWindow = true,
-                RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8
+                RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true, StandardOutputEncoding = Encoding.UTF8
             }, EnableRaisingEvents = true };
             bool started = false;
             server.OutputDataReceived += delegate(object sender, DataReceivedEventArgs e) {
@@ -158,7 +166,7 @@ internal class Launcher : Form {
         string chrome = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), @"Google\Chrome\Application\chrome.exe");
         string browser = File.Exists(edge) ? edge : File.Exists(chrome) ? chrome : null;
         try {
-            if (browser != null) Process.Start(new ProcessStartInfo(browser, "--app=\"" + url + "\" --new-window") { UseShellExecute = true });
+            if (browser != null) Process.Start(new ProcessStartInfo(browser, "--app=\"" + url + "&managed=1\" --new-window") { UseShellExecute = true });
             else Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
         } catch (Exception e) { MessageBox.Show(this, "无法打开编辑器：" + e.Message); }
     }

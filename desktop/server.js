@@ -3,12 +3,21 @@ const http = require("node:http"), fs = require("node:fs/promises"), path = requ
 const { Library } = require("./library"), github = require("./github");
 const childProcess = require("node:child_process");
 const { checkedPath } = require("./artifacts");
+const { ArtifactTrash } = require("./trash");
 const ROOT = path.resolve(__dirname, "..");
 function createServer(root = ROOT) {
   const library = new Library(root), token = crypto.randomBytes(32).toString("hex");
+  const trash = new ArtifactTrash(library);
+  const editorConnections = new Set();
+  let shuttingDown = false;
+  function notifyShutdown() {
+    shuttingDown = true;
+    for (const response of editorConnections) response.end('{"shutdown":true}');
+    editorConnections.clear();
+  }
   const assets = { "/": ["index.html", "text/html"], "/index.html": ["index.html", "text/html"],
     "/app.js": ["app.js", "application/javascript"], "/core.js": ["core.js", "application/javascript"], "/style.css": ["style.css", "text/css"],
-    "/assets/icon.png": ["assets/icon.png", "image/png"] };
+    "/assets/icon.png": ["assets/icon.png", "image/png"], "/explorer.css": ["explorer.css", "text/css"] };
   const server = http.createServer(async (req, res) => {
     const json = (status, body) => { res.writeHead(status, { "Content-Type": "application/json;charset=utf-8" }); res.end(JSON.stringify(body)); };
     res.setHeader("Cache-Control", "no-store");
@@ -24,6 +33,14 @@ function createServer(root = ROOT) {
         res.end(await fs.readFile(path.join(root, file))); return;
       }
       if (req.headers["x-score-token"] !== token) return json(403, { error: "请通过桌面应用重新打开编辑器" });
+      if (url.pathname === "/api/lifecycle" && req.method === "GET") {
+        if (shuttingDown) return json(200, { shutdown: true });
+        res.writeHead(200, { "Content-Type": "application/json;charset=utf-8" });
+        res.flushHeaders();
+        editorConnections.add(res);
+        res.on("close", () => editorConnections.delete(res));
+        return;
+      }
       let body = {};
       if (req.method === "POST") {
         let size = 0; const chunks = [];
@@ -35,12 +52,17 @@ function createServer(root = ROOT) {
       if (url.pathname === "/api/artifacts/export" && req.method === "POST") return json(200, await library.artifacts.export(body));
       if (url.pathname === "/api/artifacts" && req.method === "GET") return json(200, { artifacts: await library.artifacts.list(url.searchParams.get("name")) });
       if (url.pathname === "/api/artifact" && req.method === "GET") return json(200, await library.artifacts.read(url.searchParams.get("name"), url.searchParams.get("id")));
+      if (url.pathname === "/api/artifacts/trash" && req.method === "GET") return json(200, await trash.summary());
+      if (url.pathname === "/api/artifacts/trash/empty" && req.method === "POST") return json(200, await trash.empty(body));
       if (url.pathname === "/api/artifacts/reveal" && req.method === "POST") {
         const { metadata } = await library.artifacts.read(body.name, body.id);
         const file = await checkedPath(root, path.join(root, metadata.relativePath));
-        await new Promise((resolve, reject) => childProcess.execFile("explorer.exe", [`/select,${file}`],
-          { windowsHide: true }, error => error ? reject(error) : resolve()));
-        return json(200, { revealed: true, id: metadata.id, fileName: metadata.fileName, relativePath: metadata.relativePath });
+        const helper = path.join(root, "bin", "ScoreFileReveal.exe");
+        await new Promise((resolve, reject) => childProcess.execFile(helper, [file],
+          { windowsHide: true, timeout: 15000 }, error => error ? reject(new Error(
+            error.code === "ENOENT" ? "缺少文件定位组件，请使用完整桌面包；脚本仍在曲库中。" :
+              `Windows 无法定位此文件，可复制完整路径到文件管理器中打开：${file}`)) : resolve()));
+        return json(200, { revealed: true, id: metadata.id, fileName: metadata.fileName, relativePath: metadata.relativePath, absolutePath: file });
       }
       if (url.pathname === "/api/artifacts/delete" && req.method === "POST") return json(200, await library.artifacts.remove(body.name, body.id));
       if (url.pathname === "/api/artifacts/clean-stale" && req.method === "POST") return json(200, await library.artifacts.cleanStale(body.name));
@@ -55,10 +77,29 @@ function createServer(root = ROOT) {
     }
   });
   server.requestTimeout = 300000;
-  return { server, library, token };
+  return { server, library, token, notifyShutdown };
 }
 if (require.main === module) {
-  const { server, token } = createServer();
+  const { server, token, notifyShutdown } = createServer();
+  let stopping = false;
+  function shutdown() {
+    if (stopping) return;
+    stopping = true;
+    notifyShutdown();
+    // Allow an editor that is still loading to receive the exit notification.
+    setTimeout(() => {
+      server.close(() => process.exit(0));
+      server.closeIdleConnections();
+      setTimeout(() => process.exit(0), 500).unref();
+    }, 1000);
+  }
+  process.stdin.setEncoding("utf8");
+  let input = "";
+  process.stdin.on("data", chunk => {
+    input = (input + chunk).slice(-1024);
+    if (input.split(/\r?\n/).includes("SHUTDOWN")) shutdown();
+  });
+  process.on("SIGTERM", shutdown);
   // Never start a second writable service on a random origin.
   server.on("error", () => { console.error("本地端口被占用，请关闭已启动的简谱工坊后重试。"); process.exitCode = 1; });
   server.listen(18761, "127.0.0.1", () => {
